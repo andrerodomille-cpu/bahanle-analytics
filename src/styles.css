@@ -814,7 +814,7 @@ label.check input { width: auto; }
 .sql-origin { font: 11px/1.4 ui-monospace, Consolas, monospace; background: var(--hover); padding: 6px; border-radius: 4px; white-space: pre-wrap; max-height: 220px; overflow: auto; }
 .nb-main > * { flex-shrink: 0; }
 
-/* ---------------- Conector mini-lake ---------------- */
+/* ---------------- Conector nextop-lake ---------------- */
 .lake-dialog { width: min(640px, 94vw); max-height: 88vh; overflow: auto; }
 .lake-list { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; max-height: 340px; overflow: auto; }
 .lake-layer { font-size: 12px; font-weight: 600; margin: 8px 0 2px; }

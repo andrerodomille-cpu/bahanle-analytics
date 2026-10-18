@@ -9,7 +9,7 @@ export type Action =
   | { type: "reset"; report: Report }
   | { type: "addTable"; table: Table }
   | { type: "removeTable"; name: string }
-  /** Atualizar (mini-lake): dados novos da fonte, reaplicando as etapas da consulta. */
+  /** Atualizar (nextop-lake): dados novos da fonte, reaplicando as etapas da consulta. */
   | { type: "refreshTable"; table: Table }
   | { type: "addRelationship"; rel: Relationship }
   | { type: "removeRelationship"; id: string }
@@ -248,7 +248,7 @@ function withSteps(t: Table, steps: QueryStep[]): Table {
   };
   const rebuilt = tableFromQuery(t.name, { ...query, steps });
   const calculated = t.columns.filter((c) => c.expression && !rebuilt.columns.some((b) => b.name === c.name));
-  // Preserva o que não vem da consulta (origem SQL do notebook, origem remota do mini-lake).
+  // Preserva o que não vem da consulta (origem SQL do notebook, origem remota do nextop-lake).
   return { ...t, ...rebuilt, columns: [...rebuilt.columns, ...calculated] };
 }
 

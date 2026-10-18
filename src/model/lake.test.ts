@@ -38,7 +38,7 @@ describe("detecção de relacionamentos", () => {
   });
 });
 
-describe("API do mini-lake", () => {
+describe("API do nextop-lake", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   it("importa tabela com tipos, origem e envia o token", async () => {
@@ -56,12 +56,12 @@ describe("API do mini-lake", () => {
     expect(table.columns.map((c) => `${c.name}:${c.type}`)).toEqual(["ano_mes:text", "faturamento:number", "data:date"]);
     expect(table.rows[1]).toEqual({ ano_mes: "2026-02", faturamento: null, data: "2026-02-01" });
     expect(table.remote).toEqual({ url: "http://lake:8000", layer: "gold", name: "vendas_mensais", updatedAt: "2026-10-18T10:00:00+00:00" });
-    expect(table.query?.origin).toBe("mini-lake: gold.vendas_mensais");
+    expect(table.query?.origin).toBe("nextop-lake: gold.vendas_mensais");
   });
 
   it("erros viram mensagens claras", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
-    await expect(listLakeTables({ url: "http://x:1" })).rejects.toThrow(/minilake serve/);
+    await expect(listLakeTables({ url: "http://x:1" })).rejects.toThrow(/nextoplake serve/);
     vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 401 })));
     await expect(listLakeTables({ url: "http://x:1" })).rejects.toBeInstanceOf(LakeError);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "Tabela gold.x não encontrada" }), { status: 404 })));
@@ -76,7 +76,7 @@ describe("atualizar tabela do lake", () => {
       type: "addTable",
       table: {
         ...source,
-        query: { origin: "mini-lake: gold.vendas_mensais", source: { columns: source.columns, rows: source.rows }, steps: [] },
+        query: { origin: "nextop-lake: gold.vendas_mensais", source: { columns: source.columns, rows: source.rows }, steps: [] },
         remote: { url: "http://lake", layer: "gold", name: "vendas_mensais" },
       },
     });
@@ -87,7 +87,7 @@ describe("atualizar tabela do lake", () => {
       type: "refreshTable",
       table: {
         ...fresh,
-        query: { origin: "mini-lake: gold.vendas_mensais", source: { columns: fresh.columns, rows: fresh.rows }, steps: [] },
+        query: { origin: "nextop-lake: gold.vendas_mensais", source: { columns: fresh.columns, rows: fresh.rows }, steps: [] },
         remote: { url: "http://lake", layer: "gold", name: "vendas_mensais", updatedAt: "novo" },
       },
     });

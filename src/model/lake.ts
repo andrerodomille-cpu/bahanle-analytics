@@ -3,14 +3,14 @@ import { newId } from "./types";
 import { tableFromQuery } from "./importers";
 
 /**
- * Conector do mini-lake: busca tabelas (silver/gold em Parquet) pela API HTTP
+ * Conector do nextop-lake: busca tabelas (silver/gold em Parquet) pela API HTTP
  * do pipeline. A tabela importada guarda de onde veio (`remote`), para o
  * "Atualizar" buscar de novo e reaplicar as etapas do editor de consultas.
  */
 
 export interface LakeConnection {
   url: string;
-  /** Token da API (MINILAKE_API_TOKEN). Fica só na sessão do navegador, nunca no relatório. */
+  /** Token da API (NEXTOPLAKE_API_TOKEN). Fica só na sessão do navegador, nunca no relatório. */
   token?: string;
 }
 
@@ -43,9 +43,9 @@ async function call<T>(conn: LakeConnection, path: string): Promise<T> {
   try {
     res = await fetch(base(conn.url) + path, { headers: conn.token ? { Authorization: `Bearer ${conn.token}` } : {} });
   } catch {
-    throw new LakeError(`Não conectou em ${base(conn.url)}. O servidor está rodando (minilake serve) e libera esta origem no CORS (MINILAKE_CORS)?`);
+    throw new LakeError(`Não conectou em ${base(conn.url)}. O servidor está rodando (nextoplake serve) e libera esta origem no CORS (NEXTOPLAKE_CORS)?`);
   }
-  if (res.status === 401) throw new LakeError("A API pediu um token válido (MINILAKE_API_TOKEN).");
+  if (res.status === 401) throw new LakeError("A API pediu um token válido (NEXTOPLAKE_API_TOKEN).");
   if (!res.ok) {
     let detail = res.statusText;
     try {
@@ -65,7 +65,7 @@ export async function fetchLakeTable(conn: LakeConnection, layer: string, name: 
   const r = await call<LakeTableData>(conn, `/api/tables/${encodeURIComponent(layer)}/${encodeURIComponent(name)}?limit=${LAKE_ROW_LIMIT}`);
   const columns = r.columns.map((c) => ({ name: c.name, type: c.type }));
   const rows: Row[] = r.rows.map((row) => Object.fromEntries(columns.map((c, i) => [c.name, row[i] ?? null])));
-  const query: TableQuery = { origin: `mini-lake: ${layer}.${name}`, source: { columns, rows }, steps };
+  const query: TableQuery = { origin: `nextop-lake: ${layer}.${name}`, source: { columns, rows }, steps };
   const table: Table = {
     ...tableFromQuery(modelName, query),
     remote: { url: base(conn.url), layer, name, updatedAt: r.updated_at },
@@ -121,7 +121,7 @@ export function detectRelationships(tables: Table[], existing: Relationship[]): 
 }
 
 // Token por URL, só na sessão do navegador (some ao fechar a aba).
-const TOKEN_KEY = (url: string) => `mini-lake-token:${base(url)}`;
+const TOKEN_KEY = (url: string) => `nextop-lake-token:${base(url)}`;
 
 export function savedToken(url: string): string {
   try {

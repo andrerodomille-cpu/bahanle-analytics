@@ -147,11 +147,11 @@ export function FieldsPane({ report, dispatch, onAddVisual, onEditMeasure, onEdi
         onChange={(e) => importFiles(e.target.files)}
       />
       <div className="row-buttons">
-        <button onClick={() => setLakeOpen(true)} title="Tabelas silver/gold do pipeline mini-lake (API HTTP)">🔌 mini-lake</button>
+        <button onClick={() => setLakeOpen(true)} title="Tabelas silver/gold do pipeline nextop-lake (API HTTP)">🔌 nextop-lake</button>
         {hasRemote && (
           <button
             disabled={refreshing === "…"}
-            title="Busca de novo as tabelas do mini-lake e reaplica as etapas da consulta"
+            title="Busca de novo as tabelas do nextop-lake e reaplica as etapas da consulta"
             onClick={async () => {
               setError(null);
               setRefreshing("…");

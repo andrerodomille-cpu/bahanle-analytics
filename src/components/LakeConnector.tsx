@@ -6,7 +6,7 @@ import type { LakeTableInfo } from "../model/lake";
 import { LAKE_ROW_LIMIT, detectRelationships, fetchLakeTable, listLakeTables, saveToken, savedToken } from "../model/lake";
 
 const DEFAULT_URL = "http://localhost:8000";
-const URL_KEY = "mini-lake-url";
+const URL_KEY = "nextop-lake-url";
 
 function lastUrl() {
   try {
@@ -20,7 +20,7 @@ const fmtRows = (n: number) => n.toLocaleString("pt-BR");
 const fmtBytes = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`).replace(".", ",");
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
-/** "Obter dados › mini-lake": conecta na API do pipeline, escolhe tabelas e importa. */
+/** "Obter dados › nextop-lake": conecta na API do pipeline, escolhe tabelas e importa. */
 export function LakeDialog({ report, dispatch, onClose }: { report: Report; dispatch: Dispatch<Action>; onClose: () => void }) {
   const [url, setUrl] = useState(lastUrl);
   const [token, setToken] = useState(() => savedToken(lastUrl()));
@@ -97,9 +97,9 @@ export function LakeDialog({ report, dispatch, onClose }: { report: Report; disp
   return (
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal lake-dialog">
-        <h3>🔌 Conectar ao mini-lake</h3>
+        <h3>🔌 Conectar ao nextop-lake</h3>
         <p className="small muted">
-          Tabelas em Parquet das camadas silver e gold, servidas pela API do pipeline (<code>minilake serve</code>).
+          Tabelas em Parquet das camadas silver e gold, servidas pela API do pipeline (<code>nextoplake serve</code>).
         </p>
         <div className="field-row">
           <label className="field" style={{ flex: 2 }}>
@@ -117,7 +117,7 @@ export function LakeDialog({ report, dispatch, onClose }: { report: Report; disp
         </button>
 
         {tables && tables.length === 0 && (
-          <p className="small muted">Nenhuma tabela publicada. Rode o pipeline (<code>minilake run</code>) e reconecte.</p>
+          <p className="small muted">Nenhuma tabela publicada. Rode o pipeline (<code>nextoplake run</code>) e reconecte.</p>
         )}
         {tables && tables.length > 0 && (
           <div className="lake-list">
@@ -166,10 +166,10 @@ export function LakeDialog({ report, dispatch, onClose }: { report: Report; disp
   );
 }
 
-/** "Atualizar" do Power BI: busca de novo todas as tabelas que vieram do mini-lake. */
+/** "Atualizar" do Power BI: busca de novo todas as tabelas que vieram do nextop-lake. */
 export async function refreshLakeTables(report: Report, dispatch: Dispatch<Action>): Promise<string> {
   const remote = report.tables.filter((t) => t.remote);
-  if (!remote.length) return "Nenhuma tabela do mini-lake no modelo.";
+  if (!remote.length) return "Nenhuma tabela do nextop-lake no modelo.";
   let rows = 0;
   for (const t of remote) {
     const r = t.remote!;

@@ -242,17 +242,17 @@ da arquitetura medalhão, com acumulado no ano por `SUM … OVER` e ano anterior
 por `LAG(…, 12)`), e a página **Camada Gold (SQL)** usa essa tabela. Na aba
 Dados, a tabela mostra o comando que a gerou.
 
-### Conector mini-lake (Parquet + DuckDB)
+### Conector nextop-lake (Parquet + DuckDB)
 
-O projeto irmão [mini-lake](../mini-lake) extrai o Postgres de produção para
+O projeto irmão [nextop-lake](../nextop-lake) extrai o Postgres de produção para
 Parquet (bronze → silver → gold, com DuckDB) e serve as tabelas por HTTP.
 No painel **Dados**:
 
-- **🔌 mini-lake**: informe a URL da API (padrão `http://localhost:8000`) e,
+- **🔌 nextop-lake**: informe a URL da API (padrão `http://localhost:8000`) e,
   se houver, o token; escolha as tabelas (as gold já vêm marcadas) e importe.
   A opção *Detectar relacionamentos* liga fato e dimensões por colunas com cara
   de chave (`loja_id`, `ProdutoID`…), únicas de um lado e contidas do outro.
-- **↻ Atualizar**: busca de novo todas as tabelas do mini-lake e **reaplica as
+- **↻ Atualizar**: busca de novo todas as tabelas do nextop-lake e **reaplica as
   etapas** do editor de consultas e as colunas calculadas, como o Atualizar do
   Power BI.
 
