@@ -21,8 +21,9 @@ export interface MultiplesResult {
  * mesmo runVisual, com um filtro de visual a mais por painel — então todos
  * os filtros, drill e Top N continuam valendo.
  */
-export function runMultiples(engine: Engine, report: Report, visual: Visual, limit = 12): MultiplesResult {
-  const field = visual.multiples!;
+export function runMultiples(
+  engine: Engine, report: Report, visual: Visual, limit = 12, field: FieldRef = visual.multiples!,
+): MultiplesResult {
   const values = engine
     .distinct(field, contextFor(report, visual))
     .filter((v) => v !== null && v !== "")

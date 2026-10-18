@@ -32,6 +32,11 @@ import {
   BulletVisual, CalendarVisual, GanttVisual, MultiplesVisual, RadarVisual, SankeyVisual, WhatIfVisual, detailTooltip,
 } from "./LabVisuals";
 import type { CalendarResult, Detail, GanttTask, MultiplesResult } from "../engine/lab";
+import type { Distribution, HierNode, TreeResult } from "../engine/extra";
+import {
+  AsTableView, BumpVisual, DumbbellVisual, PictogramVisual, PlayScatterVisual, SunburstVisual, TreeMatrixVisual, ViolinVisual,
+  WaffleVisual,
+} from "./ExtraVisuals";
 import { BoxplotVisual, DecompVisual, HistogramVisual, InfluencersVisual, type Analysis } from "./AnalyticsVisuals";
 import { BubbleMapVisual, ChoroplethVisual, ImageVisual } from "./GeoVisuals";
 import type { BubbleResult, ChoroplethResult } from "../engine/geo";
@@ -68,6 +73,14 @@ export const MEASURE_SLOTS: Partial<Record<Visual["type"], string[]>> = {
   whatif: [],
   sankey: ["Valores"],
   gantt: [],
+  stacked100: ["Valores"],
+  area100: ["Valores"],
+  bump: ["Valores"],
+  dumbbell: ["Antes", "Depois"],
+  sunburst: ["Valores"],
+  waffle: ["Valores"],
+  pictogram: ["Valores"],
+  violin: [],
   narrative: ["Medida", "Comparar com (opcional)"],
   bubblemap: ["Tamanho", "Cor (opcional)"],
   image: [],
@@ -80,10 +93,12 @@ export const NO_AXIS: Visual["type"][] = [
 ];
 
 /** Visuais que não usam medida. */
-const NO_MEASURE: Visual["type"][] = ["slicer", "histogram", "boxplot", "text", "button", "image", "fieldparam", "whatif", "gantt"];
+const NO_MEASURE: Visual["type"][] = [
+  "slicer", "histogram", "boxplot", "text", "button", "image", "fieldparam", "whatif", "gantt", "violin",
+];
 
 /** Visuais que usam o campo de legenda / colunas. */
-export const USES_LEGEND: Visual["type"][] = ["stacked", "matrix", "heatmap", "sankey"];
+export const USES_LEGEND: Visual["type"][] = ["stacked", "matrix", "heatmap", "sankey", "stacked100", "area100", "bump"];
 
 interface Props {
   visual: Visual;
@@ -118,6 +133,15 @@ interface Props {
   /** Dica de ferramenta com detalhes: por rótulo da categoria. */
   details?: Map<string, Detail>;
   detailExtras?: Measure[];
+  /** Tabela: minigráfico por rótulo da categoria. */
+  sparks?: Map<string, (number | null)[]>;
+  /** Resultados do último pacote: árvore da matriz, hierarquia, distribuições, quadros da animação. */
+  extra?:
+    | { kind: "tree"; tree: TreeResult }
+    | { kind: "hier"; hier: { total: number; nodes: HierNode[] } }
+    | { kind: "dists"; dists: Distribution[] }
+    | { kind: "play"; frames: MultiplesResult };
+  onExpandAll?: () => void;
 }
 
 const isMulti = (e?: { ctrlKey?: boolean; shiftKey?: boolean; metaKey?: boolean }) =>
@@ -139,20 +163,27 @@ export function VisualView(props: Props) {
   if (visual.type === "button") return <ButtonVisual visual={visual} onAction={props.onAction} />;
   if (!NO_AXIS.includes(visual.type) && !visual.axis)
     return <div className="visual-msg">Escolha o campo de eixo no painel à direita.</div>;
-  if (USES_LEGEND.includes(visual.type) && !visual.legend)
+  if (USES_LEGEND.includes(visual.type) && !visual.legend && !(visual.type === "matrix" && visual.expandable))
     return <div className="visual-msg">Escolha o campo de {visual.type === "stacked" ? "legenda" : "colunas"}.</div>;
-  if ((visual.type === "histogram" || visual.type === "boxplot") && !visual.valueField)
+  if ((visual.type === "histogram" || visual.type === "boxplot" || visual.type === "violin") && !visual.valueField)
     return <div className="visual-msg">Escolha a coluna numérica em "Valores" no painel à direita.</div>;
   if (!NO_MEASURE.includes(visual.type) && measures.length === 0)
     return <div className="visual-msg">Adicione ao menos uma medida.</div>;
   if (visual.type === "scatter" && measures.length < 2)
     return <div className="visual-msg">A dispersão precisa de duas medidas: X e Y.</div>;
+  if (visual.type === "dumbbell" && measures.length < 2)
+    return <div className="visual-msg">O haltere precisa de duas medidas: antes e depois.</div>;
+  if (visual.asTable) return <AsTableView visual={visual} rows={result.rows} grid={grid} measures={measures} />;
   if (visual.type === "sankey" && !visual.legend)
     return <div className="visual-msg">Escolha o campo de destino no painel à direita.</div>;
   if (result.rows.length === 0 && !NO_AXIS.includes(visual.type) && visual.type !== "boxplot")
     return <div className="visual-msg">Sem dados para os filtros atuais.</div>;
 
   const a = props.analysis;
+  const ex = props.extra;
+  // Chave "valor@coluna" do filtro de valor único deste visual (para destacar o item escolhido).
+  const own = props.ownFilter;
+  const ownFilterKey = own && !own.range && own.values.length === 1 ? `${valueKey(own.values[0])}@${own.field.column}` : undefined;
   const common = {
     visual, measures, ownFilter: props.ownFilter, onSelect: props.onSelect,
     onFilterField: props.onFilterField, onSetRange: props.onSetRange, onUpdate: props.onUpdate,
@@ -203,7 +234,32 @@ export function VisualView(props: Props) {
     case "table":
       return <TableVisual {...props} />;
     case "matrix":
+      if (visual.expandable && ex?.kind === "tree") {
+        return (
+          <TreeMatrixVisual visual={visual} tree={ex.tree} measures={measures} ownFilterKey={ownFilterKey}
+            onFilterField={props.onFilterField} onUpdate={props.onUpdate} onExpandAll={props.onExpandAll ?? (() => {})} />
+        );
+      }
       return <MatrixVisual {...props} />;
+    case "stacked100":
+    case "area100":
+      return <StackedVisual {...props} />;
+    case "bump":
+      return grid
+        ? <BumpVisual visual={visual} grid={grid} measures={measures} onFilterField={props.onFilterField} ownFilterKey={ownFilterKey} />
+        : null;
+    case "dumbbell":
+      return <DumbbellVisual rows={result.rows} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
+    case "sunburst":
+      return ex?.kind === "hier"
+        ? <SunburstVisual hier={ex.hier} measures={measures} onFilterField={props.onFilterField} ownFilterKey={ownFilterKey} />
+        : null;
+    case "waffle":
+      return <WaffleVisual rows={result.rows} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
+    case "pictogram":
+      return <PictogramVisual visual={visual} rows={orderRows(visual, result.rows)} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
+    case "violin":
+      return ex?.kind === "dists" ? <ViolinVisual visual={visual} dists={ex.dists} selected={props.selected} onSelect={props.onSelect} /> : null;
     case "bar":
     case "hbar":
     case "line":
@@ -237,6 +293,9 @@ export function VisualView(props: Props) {
     case "stacked":
       return <StackedVisual {...props} />;
     case "scatter":
+      if (visual.playField && ex?.kind === "play") {
+        return <PlayScatterVisual visual={visual} frames={ex.frames} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
+      }
       return <ScatterVisual {...props} />;
     case "pie":
       return <PieVisual {...props} />;
@@ -375,7 +434,25 @@ function SortHeader({ label, by, visual, onUpdate, className }: {
   );
 }
 
-function TableVisual({ visual, result, totals, measures, selected, onSelect, onUpdate }: Props) {
+/** Minigráfico de uma linha da tabela (tendência da 1ª medida). */
+function Sparkline({ values, color }: { values: (number | null)[]; color: string }) {
+  const ys = values.map((v) => v ?? 0);
+  if (ys.length < 2) return null;
+  const lo = Math.min(...ys);
+  const hi = Math.max(...ys);
+  const w = 90;
+  const h = 20;
+  const pts = ys.map((y, i) => `${((i / (ys.length - 1)) * w).toFixed(1)},${(h - 2 - ((y - lo) / (hi - lo || 1)) * (h - 4)).toFixed(1)}`);
+  const last = pts[pts.length - 1].split(",");
+  return (
+    <svg width={w} height={h} className="sparkline">
+      <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth={1.5} />
+      <circle cx={last[0]} cy={last[1]} r={2} fill={color} />
+    </svg>
+  );
+}
+
+function TableVisual({ visual, result, totals, measures, selected, onSelect, onUpdate, sparks }: Props) {
   const PALETTE = usePalette();
   const rows = orderRows(visual, result.rows);
   const max = measures.map((_, i) => maxOf(rows.map((r) => r.values[i])));
@@ -392,6 +469,7 @@ function TableVisual({ visual, result, totals, measures, selected, onSelect, onU
             {measures.map((m, i) => (
               <SortHeader key={m.id} label={m.name} by={i} visual={visual} onUpdate={onUpdate} className="num" />
             ))}
+            {sparks && <th>Tendência ({fieldLabel(visual.sparkline!)})</th>}
           </tr>
         </thead>
         <tbody>
@@ -403,6 +481,7 @@ function TableVisual({ visual, result, totals, measures, selected, onSelect, onU
                   <RuledValue rules={visual.rules} measure={i} value={v} text={formatMeasure(v, measures[i].format)} />
                 </td>
               ))}
+              {sparks && <td><Sparkline values={sparks.get(formatValue(r.category)) ?? []} color={PALETTE[0]} /></td>}
             </tr>
           ))}
         </tbody>
@@ -410,6 +489,7 @@ function TableVisual({ visual, result, totals, measures, selected, onSelect, onU
           <tr>
             <td>Total</td>
             {totals.map((v, i) => <td key={i} className="num">{formatMeasure(v, measures[i].format)}</td>)}
+            {sparks && <td />}
           </tr>
         </tfoot>
       </table>
@@ -483,17 +563,6 @@ function MatrixVisual({ visual, grid, measures, selected, onSelect }: Props) {
 }
 
 // ---------------- Gráficos cartesianos ----------------
-
-function measureTooltip(measures: Measure[], fallback?: Measure) {
-  return (
-    <Tooltip
-      formatter={(v: number, name: string) => {
-        const m = measures.find((x) => x.name === name) ?? fallback;
-        return formatMeasure(v, m?.format ?? "number");
-      }}
-    />
-  );
-}
 
 function CartesianVisual({ visual, result, measures, selected, onSelect, details, detailExtras }: Props) {
   const PALETTE = usePalette();
@@ -646,25 +715,69 @@ const REF_LABEL: Record<RefLine["kind"], string> = {
   constant: "Meta", average: "Média", median: "Mediana", min: "Mínimo", max: "Máximo",
 };
 
-function StackedVisual({ grid, measures, selected, onSelect }: Props) {
+/**
+ * Colunas empilhadas, colunas 100% e área 100%. Nas versões 100%, o Recharts
+ * normaliza cada pilha (stackOffset "expand"): o eixo vai de 0 a 100% e mostra
+ * a composição, não o tamanho.
+ */
+function StackedVisual({ visual, grid, measures, selected, onSelect }: Props) {
   const PALETTE = usePalette();
   if (!grid) return null;
   const m = measures[0];
+  const percent = visual.type === "stacked100" || visual.type === "area100";
   const rows = [...grid.rows].sort(compareValues);
   const cols = [...grid.cols].sort(compareValues);
+  const names = cols.map(formatValue);
   const data = rows.map((r) => {
     const d: Record<string, string | number | null> = { __label: formatValue(r) };
     for (const c of cols) d[formatValue(c)] = grid.cells.get(valueKey(r))?.get(valueKey(c))?.[0] ?? null;
     return d;
   });
   const dim = (r: Value) => selected.size > 0 && !selected.has(valueKey(r));
+  const margin = { top: 5, right: 12, bottom: 5, left: 0 };
+  const xAxis = <XAxis dataKey="__label" tick={{ fontSize: 11 }} interval={rows.length > 8 ? "preserveStartEnd" : 0} minTickGap={4} />;
+  const yAxis = (
+    <YAxis tick={{ fontSize: 11 }} width={percent ? 44 : 70}
+      tickFormatter={(v: number) => (percent ? `${Math.round(v * 100)}%` : formatMeasure(v, m.format, true))} />
+  );
+  // Na dica, valor e participação na pilha.
+  const tooltip = (
+    <Tooltip
+      formatter={(v: number, _name: string, item: { payload?: Record<string, unknown> }) => {
+        const sum = names.reduce((a, n) => a + (Number(item.payload?.[n]) || 0), 0);
+        const share = sum ? ` (${formatMeasure(v / sum, "percent")})` : "";
+        return `${formatMeasure(v, m.format)}${share}`;
+      }}
+    />
+  );
+  if (visual.type === "area100") {
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={margin} stackOffset="expand"
+          onClick={(s: { activeTooltipIndex?: number } | null, e: React.MouseEvent) => {
+            const i = s?.activeTooltipIndex;
+            if (i !== undefined && rows[i] !== undefined) onSelect(rows[i], isMulti(e));
+          }}>
+          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+          {xAxis}
+          {yAxis}
+          {tooltip}
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          {cols.map((c, i) => (
+            <Area key={valueKey(c)} dataKey={formatValue(c)} stackId="pilha" type="monotone"
+              stroke={PALETTE[i % PALETTE.length]} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.75} />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+    );
+  }
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart data={data} margin={{ top: 5, right: 12, bottom: 5, left: 0 }}>
+      <BarChart data={data} margin={margin} stackOffset={percent ? "expand" : undefined}>
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="__label" tick={{ fontSize: 11 }} interval={rows.length > 8 ? "preserveStartEnd" : 0} minTickGap={4} />
-        <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v: number) => formatMeasure(v, m.format, true)} />
-        {measureTooltip([], m)}
+        {xAxis}
+        {yAxis}
+        {tooltip}
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {cols.map((c, i) => (
           <Bar

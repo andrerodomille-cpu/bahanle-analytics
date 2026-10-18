@@ -7,6 +7,7 @@ import {
   Engine, axisOf, contextFor, fillTemplate, hierarchyOf, runGrid, runTotals, runVisual, valueKey, whatIfParams,
 } from "../engine/query";
 import { detailMeasures, runCalendar, runDetails, runGantt, runMultiples } from "../engine/lab";
+import { allPaths, runDistributions, runHierarchy, runMatrixTree } from "../engine/extra";
 import { distributionValues, generateNarrative, keyInfluencers, runBoxplot, runDecomposition } from "../engine/analytics";
 import type { RangeDomain } from "./Package3Visuals";
 import { isIsoDate } from "../model/dates";
@@ -16,6 +17,7 @@ import { USES_LEGEND, VisualView } from "./VisualView";
 import { downloadText, visualToCsv } from "../model/exportCsv";
 import { formatMeasure, formatValue } from "../model/format";
 import { measure } from "../model/perf";
+import { expandGroups, mobileOrder, movePatches } from "../engine/arrange";
 
 const GRID = 10;
 const snap = (n: number) => Math.max(0, Math.round(n / GRID) * GRID);
@@ -24,8 +26,11 @@ interface Props {
   report: Report;
   pageId: string;
   dispatch: Dispatch<Action>;
-  selectedId: string | null;
-  onSelectVisual: (id: string | null) => void;
+  selectedIds: string[];
+  /** `additive`: Ctrl/Shift+clique no título acumula visuais na seleção. */
+  onSelectVisual: (id: string | null, additive?: boolean) => void;
+  /** Layout para celular: uma coluna, na ordem de leitura da página. */
+  mobile?: boolean;
   /** Relatório publicado: sem mover, redimensionar ou duplicar visuais. */
   readOnly?: boolean;
   /** Botões: ir para uma página ou aplicar um indicador. */
@@ -56,11 +61,17 @@ const DECORATIVE: Visual["type"][] = ["text", "button", "image"];
 const ANALYSIS: Visual["type"][] = ["histogram", "boxplot", "influencers", "decomp", "narrative"];
 /** Mapas: consulta normal + posição geográfica; sem drill. */
 const MAPS: Visual["type"][] = ["map", "bubblemap"];
+/** Visuais que já são tabela/controle ou cujo resultado não é categoria × medida. */
+const NO_TABLE_VIEW: Visual["type"][] = [
+  "table", "matrix", "card", "slicer", "whatif", "fieldparam", "multicard", "histogram", "boxplot", "influencers",
+  "decomp", "narrative", "violin", "sunburst", "calendar", "gantt",
+];
 /** Visuais que usam a linha de total (medidas sem o filtro de categoria). */
 const NEEDS_TOTALS: Visual["type"][] = ["table", "kpi", "waterfall", "bullet"];
 
 export function Canvas({
-  report, pageId, dispatch, selectedId, onSelectVisual, readOnly, onAction, onDrillthrough, engineEpoch = 0, renderTick = 0,
+  report, pageId, dispatch, selectedIds, onSelectVisual, readOnly, onAction, onDrillthrough, engineEpoch = 0, renderTick = 0,
+  mobile = false,
 }: Props) {
   // Um motor por versão do modelo: mover visuais ou filtrar reaproveita os caches.
   const { tables, relationships, measures } = report;
@@ -96,13 +107,21 @@ export function Canvas({
       list.push({ icon: focusId === v.id ? "⤡" : "⤢", title: focusId === v.id ? "Voltar ao relatório" : "Modo foco",
         run: () => setFocusId(focusId === v.id ? null : v.id) });
     }
+    if (!DECORATIVE.includes(v.type) && !NO_TABLE_VIEW.includes(v.type)) {
+      list.push({
+        icon: v.asTable ? "📊" : "⊞",
+        title: v.asTable ? "Mostrar como gráfico" : "Mostrar como tabela",
+        active: !!v.asTable,
+        run: () => dispatch({ type: "updateVisual", id: v.id, patch: { asTable: !v.asTable } }),
+      });
+    }
     // Análises têm resultados próprios (faixas, quartis…), fora da tabela categoria × medida.
     if (!DECORATIVE.includes(v.type) && !ANALYSIS.includes(v.type)) {
       list.push({ icon: "⭳", title: "Exportar dados (CSV)", run: () => exportVisual(engine, report, v) });
     }
     if (!readOnly) {
       list.push({ icon: "⧉", title: "Duplicar visual", run: () => {
-        const copy = { ...v, id: newId(), x: v.x + 20, y: v.y + 20, title: `${v.title} (cópia)` };
+        const copy = { ...v, id: newId(), x: v.x + 20, y: v.y + 20, title: `${v.title} (cópia)`, groupId: undefined };
         dispatch({ type: "addVisual", visual: copy });
         onSelectVisual(copy.id);
       } });
@@ -137,6 +156,38 @@ export function Canvas({
     );
   }
 
+  // Arrastar um visual selecionado junto com outros (ou de um grupo) move o conjunto todo.
+  const startMove = (v: Visual) => {
+    const ids = selectedIds.includes(v.id) ? selectedIds : expandGroups(visuals, [v.id]);
+    const start = visuals.filter((x) => ids.includes(x.id));
+    return (dx: number, dy: number) => dispatch({ type: "updateVisuals", patches: movePatches(start, dx, dy, snap) });
+  };
+
+  if (mobile) {
+    return (
+      <div className="canvas-scroll" onPointerDown={() => onSelectVisual(null)}>
+        <div className="canvas mobile">
+          {mobileOrder(visuals).map((v) => (
+            <Frame
+              key={v.id}
+              report={report}
+              visual={v}
+              selected={selectedIds.includes(v.id)}
+              readOnly
+              mobile
+              actions={actions(v).filter((a) => a.title !== "Duplicar visual")}
+              onSelect={() => onSelectVisual(v.id)}
+              onChange={() => {}}
+            >
+              {body(v)}
+            </Frame>
+          ))}
+          {visuals.length === 0 && <div className="canvas-empty">Página vazia.</div>}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="canvas-scroll" onPointerDown={() => onSelectVisual(null)}>
       <div className="canvas" style={{ height }}>
@@ -145,10 +196,11 @@ export function Canvas({
             key={v.id}
             report={report}
             visual={v}
-            selected={v.id === selectedId}
+            selected={selectedIds.includes(v.id)}
             readOnly={readOnly}
             actions={actions(v)}
-            onSelect={() => onSelectVisual(v.id)}
+            onSelect={(additive) => onSelectVisual(v.id, additive)}
+            onStartMove={() => startMove(v)}
             onChange={(patch) => dispatch({ type: "updateVisual", id: v.id, patch })}
           >
             {body(v)}
@@ -166,7 +218,8 @@ export function Canvas({
 
 /** Botões de drill do Power BI: subir, ir para o próximo nível e o modo "clique detalha". */
 function drillActions(report: Report, v: Visual, dispatch: Dispatch<Action>): FrameAction[] {
-  if (["kpi", "slicer", "fieldparam", "bullet", "calendar", "gantt", "sankey", "whatif", "radar"].includes(v.type) || DECORATIVE.includes(v.type) || ANALYSIS.includes(v.type) || MAPS.includes(v.type)) return [];
+  if (["kpi", "slicer", "fieldparam", "bullet", "calendar", "gantt", "sankey", "whatif", "radar", "sunburst", "violin",
+    "waffle", "pictogram", "dumbbell", "bump", "stacked100", "area100"].includes(v.type) || (v.type === "matrix" && v.expandable) || DECORATIVE.includes(v.type) || ANALYSIS.includes(v.type) || MAPS.includes(v.type)) return [];
   const levels = hierarchyOf(report, v);
   if (levels.length < 2) return [];
   const level = Math.min(v.drill?.level ?? 0, levels.length - 1);
@@ -260,6 +313,8 @@ function visualBody({ report, engine, visual, dispatch, onAction }: BodyProps) {
   let geo: React.ComponentProps<typeof VisualView>["geo"];
   let lab: React.ComponentProps<typeof VisualView>["lab"];
   let details: React.ComponentProps<typeof VisualView>["details"];
+  let extra: React.ComponentProps<typeof VisualView>["extra"];
+  let sparks: React.ComponentProps<typeof VisualView>["sparks"];
   try {
     if (visual.type === "histogram") analysis = { kind: "histogram", values: distributionValues(engine, report, visual) };
     if (visual.type === "boxplot") analysis = { kind: "boxplot", rows: runBoxplot(engine, report, visual) };
@@ -282,6 +337,18 @@ function visualBody({ report, engine, visual, dispatch, onAction }: BodyProps) {
       lab = { kind: "calendar", result: runCalendar(engine, report, visual, measures[0]) };
     }
     if (visual.type === "gantt") lab = { kind: "gantt", tasks: runGantt(engine, report, visual) };
+    if (visual.type === "matrix" && visual.expandable && measures.length) {
+      extra = { kind: "tree", tree: runMatrixTree(engine, report, visual, measures) };
+    }
+    if (visual.type === "sunburst" && measures[0]) extra = { kind: "hier", hier: runHierarchy(engine, report, visual, measures[0]) };
+    if (visual.type === "violin") extra = { kind: "dists", dists: runDistributions(engine, report, visual) };
+    if (visual.type === "scatter" && visual.playField && measures.length >= 2) {
+      extra = { kind: "play", frames: runMultiples(engine, report, visual, 60, visual.playField) };
+    }
+    if (visual.type === "table" && visual.sparkline && visual.axis && !result.error) {
+      const trend = runDetails(engine, report, { ...visual, tooltipMeasures: [], tooltipTrend: visual.sparkline }, visual.axis, result.rows, 200);
+      sparks = new Map([...trend].map(([k, d]) => [k, d.trend.map((t) => t.value)]));
+    }
     const axisNow = axisOf(report, visual);
     if ((visual.tooltipMeasures?.length || visual.tooltipTrend) && axisNow && !result.error) {
       details = runDetails(engine, report, visual, axisNow, result.rows);
@@ -343,6 +410,9 @@ function visualBody({ report, engine, visual, dispatch, onAction }: BodyProps) {
       analysis={analysis}
       geo={geo}
       lab={lab}
+      extra={extra}
+      sparks={sparks}
+      onExpandAll={() => update({ expanded: allPaths(engine, report, visual) })}
       details={details}
       detailExtras={details ? detailMeasures(report, visual) : undefined}
       ownFilter={own}
@@ -390,13 +460,17 @@ interface FrameAction {
   disabled?: boolean;
 }
 
-function Frame({ report, visual, selected, readOnly, actions, onSelect, onChange, children }: {
+function Frame({ report, visual, selected, readOnly, mobile, actions, onSelect, onStartMove, onChange, children }: {
   report: Report;
   visual: Visual;
   selected: boolean;
   readOnly?: boolean;
+  /** Empilhado na coluna do celular: largura toda, sem posição absoluta. */
+  mobile?: boolean;
   actions: FrameAction[];
-  onSelect: () => void;
+  onSelect: (additive: boolean) => void;
+  /** Início do arraste pelo título: devolve quem move o conjunto selecionado. */
+  onStartMove?: () => (dx: number, dy: number) => void;
   onChange: (patch: Partial<Visual>) => void;
   children: React.ReactNode;
 }) {
@@ -415,12 +489,17 @@ function Frame({ report, visual, selected, readOnly, actions, onSelect, onChange
     if (readOnly) return;
     e.preventDefault();
     e.stopPropagation();
-    onSelect();
+    const additive = e.ctrlKey || e.metaKey || e.shiftKey;
+    onSelect(additive);
+    // Ctrl/Shift+clique só muda a seleção: não começa a arrastar.
+    if (additive && mode === "move") return;
     const start = { x: e.clientX, y: e.clientY, vx: visual.x, vy: visual.y, w: visual.w, h: visual.h };
+    const moveSet = mode === "move" ? onStartMove?.() : undefined;
     const move = (ev: PointerEvent) => {
       const dx = ev.clientX - start.x;
       const dy = ev.clientY - start.y;
-      onChange(
+      if (moveSet) moveSet(dx, dy);
+      else onChange(
         mode === "move"
           ? { x: snap(start.vx + dx), y: snap(start.vy + dy) }
           : { w: Math.max(140, snap(start.w + dx)), h: Math.max(90, snap(start.h + dy)) },
@@ -437,11 +516,14 @@ function Frame({ report, visual, selected, readOnly, actions, onSelect, onChange
   return (
     <div
       className={"frame" + (selected ? " selected" : "") + (readOnly ? " readonly" : "") +
-        (DECORATIVE.includes(visual.type) ? " chromeless" : "")}
-      style={{ left: visual.x, top: visual.y, width: visual.w, height: visual.h }}
+        (DECORATIVE.includes(visual.type) ? " chromeless" : "") + (mobile ? " mobile" : "") +
+        (visual.groupId && selected ? " grouped" : "")}
+      style={mobile
+        ? { height: DECORATIVE.includes(visual.type) ? Math.min(visual.h, 140) : Math.max(220, Math.min(visual.h, 420)) }
+        : { left: visual.x, top: visual.y, width: visual.w, height: visual.h }}
       onPointerDown={(e) => {
         e.stopPropagation();
-        onSelect();
+        onSelect(false);
       }}
       onContextMenu={(e) => {
         if (!menuAction) return;

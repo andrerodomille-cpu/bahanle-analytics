@@ -19,6 +19,9 @@ export type Action =
   | { type: "addVisual"; visual: Visual }
   | { type: "updateVisual"; id: string; patch: Partial<Visual> }
   | { type: "removeVisual"; id: string }
+  /** Vários visuais de uma vez (mover um grupo, alinhar, distribuir): um único passo de desfazer. */
+  | { type: "updateVisuals"; patches: Record<string, Partial<Visual>> }
+  | { type: "removeVisuals"; ids: string[] }
   | { type: "toggleFilter"; filter: CrossFilter; multi: boolean }
   | { type: "setFilter"; sourceVisualId: string; filter: CrossFilter | null }
   | { type: "clearFilters"; pageId: string }
@@ -109,6 +112,21 @@ export function reducer(state: Report, action: Action): Report {
         filters: state.filters.filter((f) => f.sourceVisualId !== action.id),
         paneFilters: state.paneFilters.filter((f) => !(f.scope === "visual" && f.targetId === action.id)),
       };
+    case "updateVisuals": {
+      const { patches } = action;
+      if (Object.keys(patches).length === 0) return state;
+      return { ...state, visuals: state.visuals.map((v) => (patches[v.id] ? { ...v, ...patches[v.id] } : v)) };
+    }
+    case "removeVisuals": {
+      const ids = new Set(action.ids);
+      if (ids.size === 0) return state;
+      return {
+        ...state,
+        visuals: state.visuals.filter((v) => !ids.has(v.id)),
+        filters: state.filters.filter((f) => !ids.has(f.sourceVisualId)),
+        paneFilters: state.paneFilters.filter((f) => !(f.scope === "visual" && f.targetId && ids.has(f.targetId))),
+      };
+    }
     case "toggleFilter": {
       // Clique num ponto de gráfico: alterna o valor; Ctrl/Shift acumula.
       const { filter, multi } = action;
@@ -244,6 +262,11 @@ const MERGE_MS = 1000;
 
 function mergeKey(action: Action): string | undefined {
   if (action.type === "updateVisual") return `visual:${action.id}:${Object.keys(action.patch).sort().join(",")}`;
+  if (action.type === "updateVisuals") {
+    const ids = Object.keys(action.patches).sort();
+    const keys = [...new Set(ids.flatMap((id) => Object.keys(action.patches[id])))].sort();
+    return `visuals:${ids.join(",")}:${keys.join(",")}`;
+  }
   if (action.type === "renamePage") return `page:${action.id}`;
   if (action.type === "updatePaneFilter") return `pane:${action.id}`;
   return undefined;

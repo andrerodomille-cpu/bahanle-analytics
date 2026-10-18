@@ -12,6 +12,8 @@ import { DataView, ModelView } from "./components/DataModelViews";
 import { MEASURE_SLOTS } from "./components/VisualView";
 import { Menu } from "./components/Menu";
 import { PerfPanel } from "./components/Package4Visuals";
+import { ArrangePane } from "./components/Arrange";
+import { expandGroups } from "./engine/arrange";
 
 type Tab = "report" | "data" | "model";
 
@@ -64,11 +66,18 @@ const SIZES: Partial<Record<VisualType, [number, number]>> = {
   gantt: [600, 320],
   pareto: [450, 300],
   narrative: [450, 200],
+  dumbbell: [450, 300],
+  sunburst: [400, 360],
+  waffle: [450, 300],
+  pictogram: [450, 300],
+  violin: [500, 320],
+  bump: [600, 320],
 };
 
 /** Quantas medidas um visual novo já recebe. */
 const DEFAULT_MEASURES: Partial<Record<VisualType, number>> = {
   scatter: 2, combo: 2, text: 0, button: 0, slicer: 0, histogram: 0, boxplot: 0, image: 0, fieldparam: 0, multicard: 2, whatif: 0, gantt: 0, radar: 3,
+  dumbbell: 2, violin: 0,
 };
 
 /**
@@ -84,7 +93,19 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   const report = history.present;
   const [tab, setTab] = useState<Tab>("report");
   const [pageId, setPageId] = useState(report.pages[0].id);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Seleção de visuais: Ctrl/Shift+clique no título acumula; um membro de grupo seleciona o grupo.
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const setSelectedId = (id: string | null) => setSelectedIds(id ? [id] : []);
+  // Layout para celular: escolhido no editor; no relatório publicado, automático em telas estreitas.
+  const [mobile, setMobile] = useState(() => viewOnly && typeof window !== "undefined" && window.innerWidth <= 700);
+  useEffect(() => {
+    if (!viewOnly) return;
+    const mq = window.matchMedia("(max-width: 700px)");
+    const on = () => setMobile(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, [viewOnly]);
   const [editing, setEditing] = useState<Measure | null | undefined>(undefined);
   const [editingColumn, setEditingColumn] = useState<{ table: string | null; column: Column | null } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -122,14 +143,27 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
       } else if (mod && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))) {
         e.preventDefault();
         dispatch({ type: "redo" });
-      } else if (e.key === "Delete" && selectedId && tab === "report") {
-        dispatch({ type: "removeVisual", id: selectedId });
-        setSelectedId(null);
+      } else if (e.key === "Delete" && selectedIds.length && tab === "report") {
+        dispatch({ type: "removeVisuals", ids: selectedIds });
+        setSelectedIds([]);
+      } else if (e.key === "Escape" && selectedIds.length) {
+        setSelectedIds([]);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedId, tab, editing, editingColumn, viewOnly]);
+  }, [selectedIds, tab, editing, editingColumn, viewOnly]);
+
+  const selectVisual = (id: string | null, additive = false) => {
+    if (!id) return setSelectedIds([]);
+    const ids = expandGroups(report.visuals, [id]);
+    if (!ids.includes(id)) ids.push(id); // recém-criado (ainda fora de report.visuals)
+    setSelectedIds((cur) => {
+      if (additive) return cur.includes(id) ? cur.filter((x) => !ids.includes(x)) : [...cur, ...ids.filter((x) => !cur.includes(x))];
+      // Clicar num visual já selecionado mantém a seleção (para arrastar o conjunto).
+      return cur.includes(id) ? cur : ids;
+    });
+  };
 
   const goToPage = (id: string) => {
     setPageId(id);
@@ -215,6 +249,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   };
 
   const selected = report.visuals.find((v) => v.id === selectedId);
+  const selection = report.visuals.filter((v) => selectedIds.includes(v.id) && v.pageId === page.id);
   const pageVisualIds = new Set(report.visuals.filter((v) => v.pageId === page.id).map((v) => v.id));
   const pageFilters = report.filters.filter((f) => pageVisualIds.has(f.sourceVisualId));
   const palette = PALETTES[report.theme.palette] ?? PALETTES.padrao;
@@ -240,6 +275,16 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
               <button title="Refazer (Ctrl+Y)" disabled={history.future.length === 0} onClick={() => dispatch({ type: "redo" })}>↷</button>
             </>
           )}
+          <button
+            className={mobile ? "active" : ""}
+            title="Layout para celular: visuais empilhados em uma coluna, na ordem de leitura"
+            onClick={() => {
+              setMobile((m) => !m);
+              setSelectedIds([]);
+            }}
+          >
+            📱 Celular
+          </button>
 
           <Menu label="🔖 Indicadores">
             {report.bookmarks.length === 0 && <div className="menu-note">Nenhum indicador salvo.</div>}
@@ -415,8 +460,9 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
                   report={report}
                   pageId={page.id}
                   dispatch={dispatch}
-                  selectedId={selectedId}
-                  onSelectVisual={setSelectedId}
+                  selectedIds={selectedIds}
+                  onSelectVisual={selectVisual}
+                  mobile={mobile}
                   readOnly={viewOnly}
                   engineEpoch={engineEpoch}
                   renderTick={renderTick}
@@ -488,7 +534,9 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
             {tab === "model" && <ModelView report={report} dispatch={dispatch} />}
           </section>
           {tab === "report" && (
-            <PropertiesPane report={report} visual={selected} pageId={page.id} dispatch={dispatch} filtersOnly={viewOnly} />
+            selection.length > 1 && !viewOnly
+              ? <ArrangePane visuals={selection} dispatch={dispatch} onSelect={setSelectedIds} />
+              : <PropertiesPane report={report} visual={selected} pageId={page.id} dispatch={dispatch} filtersOnly={viewOnly} />
           )}
         </main>
 

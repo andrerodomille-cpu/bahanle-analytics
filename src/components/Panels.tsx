@@ -51,7 +51,18 @@ export const VISUAL_TYPES: { type: VisualType; label: string; icon: string }[] =
   { type: "whatif", label: "E se", icon: "⇆" },
   { type: "sankey", label: "Sankey", icon: "⫘" },
   { type: "gantt", label: "Gantt", icon: "☰▬" },
+  { type: "stacked100", label: "Colunas 100%", icon: "▥%" },
+  { type: "area100", label: "Área 100%", icon: "◭%" },
+  { type: "bump", label: "Ranking", icon: "⤨" },
+  { type: "dumbbell", label: "Haltere", icon: "●─●" },
+  { type: "sunburst", label: "Sunburst", icon: "◎" },
+  { type: "waffle", label: "Waffle", icon: "▦▦" },
+  { type: "pictogram", label: "Pictograma", icon: "☺☺" },
+  { type: "violin", label: "Violino", icon: "◊" },
 ];
+
+/** Ícones oferecidos no pictograma. */
+const PICTO_ICONS = ["●", "■", "★", "♥", "☺", "👤", "🛒", "📦", "💰", "🏠", "🚗", "☕"];
 
 const AXIS_LABEL: Partial<Record<VisualType, string>> = {
   slicer: "Campo",
@@ -70,6 +81,14 @@ const AXIS_LABEL: Partial<Record<VisualType, string>> = {
   sankey: "Origem",
   gantt: "Tarefa",
   waterfall: "Categoria (cada degrau)",
+  stacked100: "Eixo X",
+  area100: "Eixo X (tempo)",
+  bump: "Período",
+  dumbbell: "Categoria (uma linha por valor)",
+  sunburst: "Anel interno (níveis abaixo: drill)",
+  waffle: "Categoria",
+  pictogram: "Categoria",
+  violin: "Categoria (um violino por valor)",
 };
 
 // ---------------- Painel esquerdo: visualizações + campos ----------------
@@ -378,12 +397,53 @@ function VisualProperties({ report, visual, dispatch }: {
         fieldSelect(AXIS_LABEL[visual.type] ?? "Eixo X / Categoria", visual.axis, (axis) => update({ axis }))}
 
       {visual.axis && !["slicer", "scatter", "kpi", "boxplot", "map", "bubblemap", "pareto", "narrative", "bullet", "radar",
-        "calendar", "sankey", "gantt"].includes(visual.type) && (
+        "calendar", "sankey", "gantt", "stacked100", "area100", "bump", "dumbbell", "waffle", "pictogram", "violin"].includes(visual.type) && (
         <DrillLevels report={report} visual={visual} update={update} />
       )}
 
       {USES_LEGEND.includes(visual.type) &&
-        fieldSelect(visual.type === "stacked" ? "Legenda" : visual.type === "sankey" ? "Destino" : "Colunas", visual.legend, (legend) => update({ legend }))}
+        fieldSelect(
+          visual.type === "stacked" || visual.type === "stacked100" || visual.type === "area100" ? "Legenda"
+            : visual.type === "sankey" ? "Destino" : visual.type === "bump" ? "Séries (uma linha por valor)"
+              : visual.type === "matrix" && visual.expandable ? "Colunas (opcional)" : "Colunas",
+          visual.legend, (legend) => update({ legend }))}
+
+      {visual.type === "matrix" && (
+        <label className="check">
+          <input type="checkbox" checked={!!visual.expandable}
+            onChange={(e) => update({ expandable: e.target.checked, expanded: undefined, drill: undefined })} />
+          Linhas hierárquicas (+/−): níveis = Linhas + níveis de detalhamento
+        </label>
+      )}
+
+      {visual.type === "table" && (
+        <FieldSelect report={report} label="Minigráfico: tendência por (opcional)" value={visual.sparkline}
+          onChange={(sparkline) => update({ sparkline })} />
+      )}
+
+      {visual.type === "scatter" && (
+        <>
+          <FieldSelect report={report} label="Eixo de reprodução (opcional, ex.: Mês)" value={visual.playField}
+            onChange={(playField) => update({ playField })} />
+          {visual.playField && <span className="small muted">▶ anima os pontos, um quadro por valor do campo.</span>}
+        </>
+      )}
+
+      {visual.type === "pictogram" && (
+        <div className="field-row">
+          <label className="field">
+            Ícone
+            <select value={visual.icon ?? "●"} onChange={(e) => update({ icon: e.target.value })}>
+              {PICTO_ICONS.map((i) => <option key={i} value={i}>{i}</option>)}
+            </select>
+          </label>
+          <label className="field">
+            Cada ícone vale
+            <input type="number" min={0} placeholder="automático" value={visual.unitValue ?? ""}
+              onChange={(e) => update({ unitValue: e.target.value === "" || Number(e.target.value) <= 0 ? undefined : Number(e.target.value) })} />
+          </label>
+        </div>
+      )}
 
       {visual.type === "gantt" && (
         <>
@@ -408,7 +468,7 @@ function VisualProperties({ report, visual, dispatch }: {
         </label>
       )}
 
-      {(visual.type === "histogram" || visual.type === "boxplot") && (
+      {(visual.type === "histogram" || visual.type === "boxplot" || visual.type === "violin") && (
         <>
           <FieldSelect
             report={report}
@@ -457,7 +517,7 @@ function VisualProperties({ report, visual, dispatch }: {
 
       {!NO_AXIS_FIELD.includes(visual.type) && <ParamLink report={report} visual={visual} update={update} />}
 
-      {!["slicer", "histogram", "boxplot", "fieldparam", "whatif", "gantt", ...LAYOUT].includes(visual.type) && (
+      {!["slicer", "histogram", "boxplot", "fieldparam", "whatif", "gantt", "violin", ...LAYOUT].includes(visual.type) && (
         <div className="field">
           {single ? "Medida" : "Medidas"}
           {slots && slots.length > 1 && (
@@ -859,7 +919,7 @@ function DrillLevels({ report, visual, update }: {
           />
         </>
       )}
-      {levels.length > 1 && (
+      {levels.length > 1 && !(visual.type === "matrix" && visual.expandable) && visual.type !== "sunburst" && (
         <label className="check">
           <input type="checkbox" checked={!!visual.drillMode} onChange={(e) => update({ drillMode: e.target.checked })} />
           Clique num item detalha (modo de drill)

@@ -114,7 +114,15 @@ export type VisualType =
   | "calendar"
   | "whatif"
   | "sankey"
-  | "gantt";
+  | "gantt"
+  | "stacked100"
+  | "area100"
+  | "bump"
+  | "dumbbell"
+  | "sunburst"
+  | "waffle"
+  | "pictogram"
+  | "violin";
 
 /** Parâmetro "e se": um valor ajustável que as medidas leem como [Nome]. */
 export interface WhatIf {
@@ -290,6 +298,21 @@ export interface Visual {
   startField?: FieldRef;
   endField?: FieldRef;
   progressField?: FieldRef;
+  /** Matriz hierárquica: linhas que abrem e fecham (níveis = eixo + drillFields). */
+  expandable?: boolean;
+  /** Caminhos abertos na matriz hierárquica (valores do caminho unidos por \u0001). */
+  expanded?: string[];
+  /** Tabela: coluna de minigráfico (tendência da 1ª medida por este campo). */
+  sparkline?: FieldRef;
+  /** "Mostrar como tabela": troca o gráfico pelos números dele. */
+  asTable?: boolean;
+  /** Dispersão animada: um quadro por valor deste campo (eixo de reprodução). */
+  playField?: FieldRef;
+  /** Pictograma: ícone e quanto vale cada ícone. */
+  icon?: string;
+  unitValue?: number;
+  /** Agrupamento de visuais: selecionam e se movem juntos. */
+  groupId?: string;
 }
 
 export type FilterScope = "visual" | "page" | "report";

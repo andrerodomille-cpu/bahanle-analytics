@@ -156,6 +156,45 @@ percorria tudo de novo). O calendário de calor de um ano caiu de ~390 ms para
 alguns milissegundos, e todo visual por categoria ficou mais rápido — veja no
 analisador de desempenho.
 
+### Composição, ranking e hierarquias
+
+- **Matriz hierárquica**: marque "Linhas hierárquicas (+/−)" e os níveis de
+  detalhamento viram linhas que abrem e fecham, com subtotais por nível;
+  ⊞ Expandir tudo / ⊟ Recolher tudo. Clicar num rótulo filtra a página.
+- **Minigráficos na tabela**: "Minigráfico: tendência por" acrescenta uma
+  coluna com a tendência da 1ª medida (ex.: por Mês) em cada linha.
+- **Colunas 100%** e **Área 100%**: composição em vez de tamanho (cada pilha
+  soma 100%); a dica mostra valor e participação.
+- **Mostrar como tabela** (botão ⊞ no cabeçalho): troca o gráfico pelos números
+  que ele desenha; 📊 volta ao gráfico.
+- **Dispersão animada**: "Eixo de reprodução" gera um quadro por valor (ex.:
+  Mês); ▶ anima e o controle deslizante escolhe o quadro. Os eixos ficam fixos
+  para a comparação entre quadros valer.
+- **Ranking (bump chart)**: a posição (1º, 2º…) de cada série por período; a
+  legenda filtra a página pela série.
+- **Haltere**: antes → depois por categoria, com a variação %.
+- **Sunburst**: anéis da hierarquia (eixo + níveis de detalhamento); o centro
+  mostra o total.
+- **Waffle**: 100 quadrados, arredondados pelo método do maior resto (a soma
+  dá sempre 100).
+- **Pictograma**: ícones proporcionais à medida; cada ícone vale um número
+  "redondo" automático ou o valor escolhido.
+- **Violino**: a densidade (estimativa por kernel, largura de Silverman) da
+  coluna numérica em cada categoria, com mediana e quartis por dentro.
+
+### Organizar e celular
+
+- **Seleção múltipla**: Ctrl/Shift+clique no título acrescenta ou tira visuais;
+  arrastar o título move o conjunto (um único passo de desfazer). Delete exclui
+  todos; Esc limpa a seleção.
+- **Alinhar e distribuir**: com 2+ visuais selecionados, o painel da direita
+  alinha pelas bordas ou centro, distribui com espaços iguais (3+) e iguala
+  largura/altura ao maior.
+- **Agrupar**: membros de um grupo são selecionados e movidos juntos.
+- **📱 Celular**: os visuais empilhados numa coluna, na ordem de leitura da
+  página (faixas de cima para baixo, da esquerda para a direita). No relatório
+  publicado, liga sozinho em telas de até 700 px.
+
 ### Mapas
 
 Os contornos dos estados vêm da malha territorial do **IBGE** (API de malhas,
@@ -185,6 +224,11 @@ HTML publicado.
 
 ### Páginas do exemplo
 
+- **Composição e ranking** — colunas 100% (regiões por trimestre), área 100%
+  (mix de categorias), ranking das lojas mês a mês, waffle, haltere ano
+  anterior → 2026, pictograma de pedidos e dispersão animada por mês.
+- **Hierarquias e distribuição** — matriz Região › Loja › Categoria com +/−,
+  sunburst, tabela com minigráficos e violino do valor das vendas.
 - **Laboratório** — marcador de faturamento x meta por região (2026), radar
   das categorias, pequenos múltiplos por região, colunas com dica detalhada e
   calendário de pedidos por dia.

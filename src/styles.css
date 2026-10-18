@@ -621,3 +621,85 @@ label.check input { width: auto; }
 /* ---------- Dica com detalhes ---------- */
 .detail-tip { min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
 .detail-trend { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 4px; }
+
+/* ---------------- Composição, ranking e hierarquias ---------------- */
+.tree-tools { display: flex; gap: 10px; align-items: center; padding: 2px 0 4px; flex-wrap: wrap; }
+.tree-toggle {
+  border: none; background: none; padding: 0; width: 16px; cursor: pointer; color: var(--muted); font-size: 11px;
+}
+.tree-toggle-space { display: inline-block; width: 16px; }
+.tree-label { cursor: pointer; }
+.tree-label:hover { text-decoration: underline; }
+.tree-matrix tr.subtotal td { font-weight: 600; background: var(--hover); }
+
+.sparkline { display: block; }
+
+.play-scatter, .bump { height: 100%; display: flex; flex-direction: column; }
+.play-chart, .bump-chart { flex: 1; min-height: 0; position: relative; }
+.play-watermark {
+  position: absolute; right: 16px; bottom: 34px; font-size: 40px; font-weight: 700;
+  color: var(--muted); opacity: 0.18; pointer-events: none;
+}
+.play-controls { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
+.play-controls input[type="range"] { flex: 1; }
+.play-controls button { width: 32px; }
+
+.bump-legend { display: flex; flex-wrap: wrap; gap: 4px 10px; padding-top: 4px; font-size: 11px; }
+.bump-legend button, .waffle-legend button, .dumbbell-row, .picto-row { border: none; background: none; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.bump-legend i, .dumbbell-legend i, .waffle-legend i {
+  display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: middle;
+}
+
+.dumbbell, .pictogram { height: 100%; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.dumbbell-legend { display: flex; gap: 12px; }
+.dumbbell-legend i { border-radius: 50%; }
+.dumbbell-row { display: grid; grid-template-columns: minmax(70px, 28%) 1fr 64px; align-items: center; gap: 8px; min-height: 24px; }
+.dumbbell-row.dim, .picto-row.dim { opacity: 0.35; }
+.dumbbell-label, .picto-label { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dumbbell-track { position: relative; height: 14px; border-bottom: 1px dashed var(--border); }
+.dumbbell-line { position: absolute; top: 6px; height: 2px; background: var(--muted); opacity: 0.5; }
+.dumbbell-dot { position: absolute; top: 2px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; }
+.dumbbell-delta { font-size: 11px; text-align: right; }
+.dumbbell-delta.good { color: #107c10; }
+.dumbbell-delta.bad { color: var(--danger); }
+
+.sunburst { height: 100%; width: 100%; overflow: hidden; }
+.sun-arc { cursor: pointer; stroke: var(--surface); stroke-width: 1; }
+.sun-arc:hover { filter: brightness(1.1); }
+.sun-label { font-size: 10px; fill: #fff; pointer-events: none; }
+.sun-center { font-size: 16px; font-weight: 600; fill: var(--text); }
+.sun-center-label { font-size: 10px; fill: var(--muted); }
+
+.waffle { height: 100%; display: flex; gap: 12px; align-items: center; overflow: hidden; }
+.waffle-grid {
+  display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(10, 1fr); gap: 2px;
+  width: min(50%, 220px); max-height: 100%; aspect-ratio: 1; flex-shrink: 0;
+}
+.waffle-grid span { border-radius: 2px; }
+.waffle-legend { display: flex; flex-direction: column; gap: 4px; font-size: 12px; overflow: auto; min-width: 0; flex: 1; }
+
+.picto-row { display: grid; grid-template-columns: minmax(60px, 22%) 1fr auto; gap: 8px; align-items: center; }
+.picto-icons { font-size: 15px; line-height: 1.3; overflow: hidden; white-space: nowrap; }
+.picto-part { display: inline-block; overflow: hidden; vertical-align: bottom; }
+.picto-value { font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ---------------- Seleção múltipla e organizar ---------------- */
+.frame.selected.grouped { border-style: dashed; }
+.arrange-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; margin-bottom: 10px; }
+.arrange-grid.two { grid-template-columns: 1fr 1fr; }
+.arrange-grid button { font-size: 11px; padding: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.arrange-icon { font-weight: 700; }
+.arrange-list { list-style: none; padding: 0; margin: 0 0 10px; font-size: 12px; }
+.arrange-list li { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid var(--border); }
+
+/* ---------------- Layout para celular ---------------- */
+.canvas.mobile {
+  min-width: 0; width: 100%; max-width: 420px; margin: 0 auto; padding: 10px;
+  display: flex; flex-direction: column; gap: 10px; background-image: none;
+}
+.frame.mobile { position: relative; width: 100%; }
+.frame.mobile .frame-title { cursor: default; }
+@media (max-width: 700px) {
+  .view-only .canvas-scroll { padding: 0; }
+  .view-only .topbar { flex-wrap: wrap; }
+}

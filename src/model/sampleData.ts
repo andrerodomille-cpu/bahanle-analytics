@@ -255,6 +255,8 @@ export function sampleReport(): Report {
       { id: "p10", name: "Monitoramento" },
       { id: "p11", name: "Laboratório" },
       { id: "p12", name: "Simulação e projetos" },
+      { id: "p13", name: "Composição e ranking" },
+      { id: "p14", name: "Hierarquias e distribuição" },
     ],
     visuals: [
       ...overview.map((v) => ({ ...v, pageId: "p1" })),
@@ -269,6 +271,8 @@ export function sampleReport(): Report {
       ...monitoring.map((v) => ({ ...v, pageId: "p10" })),
       ...lab.map((v) => ({ ...v, pageId: "p11" })),
       ...simulation.map((v) => ({ ...v, pageId: "p12" })),
+      ...composition.map((v) => ({ ...v, pageId: "p13" })),
+      ...hierarchies.map((v) => ({ ...v, pageId: "p14" })),
     ],
     // A segmentação relativa da página Monitoramento começa em "Este ano" (2026).
     filters: [{
@@ -280,6 +284,8 @@ export function sampleReport(): Report {
       // Página Executivo: tudo em 2026 (filtro de página).
       { ...ano2026("f5", "p5"), scope: "page" },
       ano2026("f6", "lb1"),
+      // Ranking e haltere comparam os meses e as categorias de 2026.
+      ano2026("f7", "cp3"), ano2026("f8", "cp5"), ano2026("f9", "hd2"),
     ],
     bookmarks: [],
     theme: { mode: "light", palette: "padrao" },
@@ -675,5 +681,61 @@ const simulation: Draft[] = [
     axis: { table: "Projetos", column: "Tarefa" }, legend: { table: "Projetos", column: "Área" },
     startField: { table: "Projetos", column: "Início" }, endField: { table: "Projetos", column: "Fim" },
     progressField: { table: "Projetos", column: "Concluído" },
+  },
+];
+
+const month = { table: "Calendário", column: "Mês" };
+const region = { table: "Lojas", column: "Região" };
+const category = { table: "Produtos", column: "Categoria" };
+
+const composition: Draft[] = [
+  {
+    id: "cp1", type: "stacked100", title: "Participação das regiões por trimestre (100%)", x: 10, y: 10, w: 450, h: 280,
+    axis: { table: "Calendário", column: "Trimestre" }, legend: region, measureIds: ["m1"],
+  },
+  {
+    id: "cp2", type: "area100", title: "Mix de categorias ao longo dos meses (área 100%)", x: 470, y: 10, w: 450, h: 280,
+    axis: month, legend: category, measureIds: ["m1"],
+  },
+  {
+    id: "cp3", type: "bump", title: "Ranking das lojas mês a mês (2026)", x: 10, y: 300, w: 610, h: 320,
+    axis: month, legend: { table: "Lojas", column: "Loja" }, measureIds: ["m1"],
+  },
+  {
+    id: "cp4", type: "waffle", title: "Faturamento por região (cada quadrado = 1%)", x: 630, y: 300, w: 290, h: 320,
+    axis: region, measureIds: ["m1"],
+  },
+  {
+    id: "cp5", type: "dumbbell", title: "Ano anterior → 2026 por categoria", x: 10, y: 630, w: 450, h: 280,
+    axis: category, measureIds: ["m8", "m1"],
+  },
+  {
+    id: "cp6", type: "pictogram", title: "Pedidos por região", x: 470, y: 630, w: 450, h: 280,
+    axis: region, measureIds: ["m2"], icon: "★",
+  },
+  {
+    id: "cp7", type: "scatter", title: "Ticket x pedidos por loja, mês a mês (▶)", x: 10, y: 920, w: 910, h: 360,
+    axis: { table: "Lojas", column: "Loja" }, measureIds: ["m2", "m3"], playField: month,
+  },
+];
+
+const hierarchies: Draft[] = [
+  {
+    id: "hd1", type: "matrix", title: "Faturamento: Região › Loja › Categoria (+/−)", x: 10, y: 10, w: 520, h: 330,
+    axis: region, drillFields: [{ table: "Lojas", column: "Loja" }, category],
+    legend: { table: "Calendário", column: "Ano" }, measureIds: ["m1"], expandable: true, expanded: ["Sudeste"],
+  },
+  {
+    id: "hd2", type: "sunburst", title: "Região › Loja › Categoria (2026)", x: 540, y: 10, w: 380, h: 330,
+    axis: region, drillFields: [{ table: "Lojas", column: "Loja" }, category], measureIds: ["m1"],
+  },
+  {
+    id: "hd3", type: "table", title: "Produtos com tendência mensal", x: 10, y: 350, w: 520, h: 330,
+    axis: { table: "Produtos", column: "Produto" }, measureIds: ["m1", "m2"], sparkline: month,
+    sort: { by: 0, desc: true },
+  },
+  {
+    id: "hd4", type: "violin", title: "Distribuição do valor das vendas por categoria", x: 540, y: 350, w: 380, h: 330,
+    axis: category, valueField: { table: "Vendas", column: "Valor" }, measureIds: [],
   },
 ];
