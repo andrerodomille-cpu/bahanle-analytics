@@ -43,6 +43,10 @@ export interface Table {
   rows: Row[];
   /** Consulta que gerou a tabela (ausente em tabelas criadas pelo exemplo). */
   query?: TableQuery;
+  /** Tabela criada por SQL num notebook (CREATE TABLE … AS): o comando que a gerou. */
+  sql?: string;
+  /** Tabela trazida do mini-lake (API HTTP): de onde buscar de novo ao atualizar. */
+  remote?: { url: string; layer: string; name: string; updatedAt?: string };
 }
 
 export type DatePart = "year" | "quarter" | "month" | "day";
@@ -357,6 +361,32 @@ export interface ReportTheme {
   palette: PaletteName;
 }
 
+// ---------- Notebooks (Databricks) ----------
+
+export type ChartKind = "bar" | "line" | "area" | "pie" | "scatter";
+
+/** Como o resultado de uma célula aparece: tabela, gráfico (com eixos) ou plano. */
+export interface CellDisplay {
+  view: "table" | "chart" | "plan";
+  chart?: ChartKind;
+  x?: string;
+  y?: string[];
+}
+
+export interface NotebookCell {
+  id: string;
+  /** Linguagem da célula; "%md" ou "%sql" na primeira linha também escolhe (comando mágico). */
+  lang: "sql" | "md";
+  source: string;
+  display?: CellDisplay;
+}
+
+export interface Notebook {
+  id: string;
+  name: string;
+  cells: NotebookCell[];
+}
+
 export interface Report {
   pages: Page[];
   tables: Table[];
@@ -368,6 +398,7 @@ export interface Report {
   bookmarks: Bookmark[];
   theme: ReportTheme;
   drillthrough?: DrillthroughState;
+  notebooks?: Notebook[];
 }
 
 const PART_SUFFIX: Record<DatePart, string> = { year: "Ano", quarter: "Trimestre", month: "Mês", day: "Dia" };

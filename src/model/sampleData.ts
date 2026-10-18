@@ -1,5 +1,6 @@
-import type { PaneFilter, Report, Row, Table, Visual } from "./types";
+import type { Notebook, PaneFilter, Report, Row, Table, Visual } from "./types";
 import { setColumn } from "./calculated";
+import { Session } from "../engine/sql";
 
 // Gerador pseudoaleatório com semente, para o exemplo ser sempre igual.
 function rng(seed: number) {
@@ -241,6 +242,17 @@ export function sampleReport(): Report {
         id: "m20", name: "Faturamento simulado", table: "Vendas", format: "currency",
         expression: "[Faturamento] * (1 + [Aumento de preço]) * (1 - [Elasticidade] * [Aumento de preço])",
       },
+      // Medidas da tabela criada por SQL no notebook (camada Gold).
+      { id: "m21", name: "Faturamento (Gold)", table: "gold_vendas_mensais", expression: "SUM(gold_vendas_mensais[faturamento])", format: "currency" },
+      {
+        id: "m22", name: "Faturamento ano anterior (Gold)", table: "gold_vendas_mensais", format: "currency",
+        expression: "SUM(gold_vendas_mensais[faturamento_ano_anterior])",
+      },
+      { id: "m23", name: "Pedidos (Gold)", table: "gold_vendas_mensais", expression: "SUM(gold_vendas_mensais[pedidos])", format: "number" },
+      {
+        id: "m24", name: "Ticket médio (Gold)", table: "gold_vendas_mensais", format: "currency",
+        expression: "DIVIDE([Faturamento (Gold)], [Pedidos (Gold)])",
+      },
     ],
     pages: [
       { id: "p5", name: "Executivo" },
@@ -257,6 +269,7 @@ export function sampleReport(): Report {
       { id: "p12", name: "Simulação e projetos" },
       { id: "p13", name: "Composição e ranking" },
       { id: "p14", name: "Hierarquias e distribuição" },
+      { id: "p15", name: "Camada Gold (SQL)" },
     ],
     visuals: [
       ...overview.map((v) => ({ ...v, pageId: "p1" })),
@@ -273,6 +286,7 @@ export function sampleReport(): Report {
       ...simulation.map((v) => ({ ...v, pageId: "p12" })),
       ...composition.map((v) => ({ ...v, pageId: "p13" })),
       ...hierarchies.map((v) => ({ ...v, pageId: "p14" })),
+      ...gold.map((v) => ({ ...v, pageId: "p15" })),
     ],
     // A segmentação relativa da página Monitoramento começa em "Este ano" (2026).
     filters: [{
@@ -304,8 +318,86 @@ export function sampleReport(): Report {
   withColumns = setColumn(withColumns, "Vendas", { name: "Faixa de Valor" },
     'IF(Vendas[Valor] >= 5000, "3. Alto", IF(Vendas[Valor] >= 1000, "2. Médio", "1. Baixo"))');
   withColumns = setColumn(withColumns, "Vendas", { name: "Categoria" }, "RELATED(Produtos[Categoria])");
-  return withColumns;
+
+  // A camada Gold é gerada pelo próprio motor SQL, com o mesmo comando do notebook.
+  const run = new Session(withColumns.tables).run(GOLD_SQL);
+  const created = run.results[0]?.effect;
+  if (run.error || created?.kind !== "createTable") throw new Error(`Exemplo: ${run.error?.message ?? "sem tabela Gold"}`);
+  return { ...withColumns, tables: [...withColumns.tables, created.table], notebooks: [introNotebook] };
 }
+
+const GOLD_SQL = `CREATE OR REPLACE TABLE gold_vendas_mensais AS
+WITH mensal AS (
+  SELECT DATE_TRUNC('month', v.Data) AS mes,
+         l.Região AS regiao,
+         SUM(v.Valor) AS faturamento,
+         COUNT(*) AS pedidos
+  FROM Vendas v
+  JOIN Lojas l ON v.LojaID = l.LojaID
+  GROUP BY 1, 2
+)
+SELECT mes, DATE_FORMAT(mes, 'yyyy-MM') AS ano_mes, regiao, faturamento, pedidos,
+       ROUND(faturamento / pedidos, 2) AS ticket_medio,
+       SUM(faturamento) OVER (PARTITION BY regiao, YEAR(mes) ORDER BY mes) AS acumulado_ano,
+       LAG(faturamento, 12) OVER (PARTITION BY regiao ORDER BY mes) AS faturamento_ano_anterior
+FROM mensal`;
+
+type Cell = Notebook["cells"][number];
+const md = (id: string, source: string): Cell => ({ id, lang: "md", source });
+const sql = (id: string, source: string, display?: Cell["display"]): Cell => ({ id, lang: "sql", source, display });
+
+const introNotebook: Notebook = {
+  id: "nb1",
+  name: "Introdução ao SQL",
+  cells: [
+    md("c1", `# Introdução ao SQL no mini-bi
+Um notebook no estilo do **Databricks**: células de SQL e de texto, executadas sobre as tabelas do modelo.
+- **Shift+Enter** executa e vai para a próxima célula; **Ctrl+Enter** executa e fica.
+- Embaixo de cada resultado: **Tabela**, **Gráfico** e **Plano** (como o motor executou).
+- Clique numa tabela do catálogo à esquerda para inserir o nome na célula.`),
+    sql("c2", "SHOW TABLES"),
+    sql("c3", "SELECT * FROM Vendas LIMIT 10"),
+    md("c4", `## Junções e agregação
+Veja na aba **Plano**: o filtro do ano desce até a leitura de Vendas (*predicate pushdown*) e as junções usam *hash join*.`),
+    sql("c5", `SELECT l.Região, p.Categoria,
+       ROUND(SUM(v.Valor), 2) AS faturamento,
+       COUNT(*) AS pedidos
+FROM Vendas v
+JOIN Lojas l ON v.LojaID = l.LojaID
+JOIN Produtos p ON v.ProdutoID = p.ProdutoID
+WHERE YEAR(v.Data) = 2026
+GROUP BY l.Região, p.Categoria
+ORDER BY faturamento DESC`, { view: "plan" }),
+    md("c6", `## Funções de janela
+RANK() OVER (PARTITION BY …) numera dentro de cada região; SUM(SUM(…)) OVER (…) soma os grupos da região.`),
+    sql("c7", `SELECT l.Região, l.Loja,
+       SUM(v.Valor) AS faturamento,
+       RANK() OVER (PARTITION BY l.Região ORDER BY SUM(v.Valor) DESC) AS posicao,
+       ROUND(100 * SUM(v.Valor) / SUM(SUM(v.Valor)) OVER (PARTITION BY l.Região), 1) AS pct_da_regiao
+FROM Vendas v
+JOIN Lojas l ON v.LojaID = l.LojaID
+GROUP BY l.Região, l.Loja
+ORDER BY l.Região, posicao`, { view: "chart", chart: "bar", x: "Loja", y: ["faturamento"] }),
+    md("c8", `## Arquitetura medalhão: camada Gold
+CREATE OR REPLACE TABLE grava o resultado como **tabela do modelo**: ela aparece nos campos do relatório e alimenta a página *Camada Gold (SQL)*. Rode a célula de novo para atualizar a tabela.`),
+    sql("c9", GOLD_SQL),
+    sql("c10", `SELECT mes, SUM(faturamento) AS faturamento, SUM(faturamento_ano_anterior) AS ano_anterior
+FROM gold_vendas_mensais
+GROUP BY mes
+ORDER BY mes`, { view: "chart", chart: "line", x: "mes", y: ["faturamento", "ano_anterior"] }),
+    md("c11", `## Visões temporárias e EXPLAIN
+Uma visão temporária vale até **reiniciar a sessão** (como num cluster do Databricks). O EXPLAIN mostra o plano em texto.`),
+    sql("c12", `CREATE OR REPLACE TEMP VIEW vendas_grandes AS
+SELECT * FROM Vendas WHERE Valor >= 5000;
+
+EXPLAIN
+SELECT p.Categoria, COUNT(*) AS vendas
+FROM vendas_grandes g
+JOIN Produtos p ON g.ProdutoID = p.ProdutoID
+WHERE p.Preço > 1000
+GROUP BY p.Categoria`),
+  ],
+};
 
 type Draft = Omit<Visual, "pageId">;
 
@@ -737,5 +829,33 @@ const hierarchies: Draft[] = [
   {
     id: "hd4", type: "violin", title: "Distribuição do valor das vendas por categoria", x: 540, y: 350, w: 380, h: 330,
     axis: category, valueField: { table: "Vendas", column: "Valor" }, measureIds: [],
+  },
+];
+
+const goldTable = "gold_vendas_mensais";
+
+const gold: Draft[] = [
+  {
+    id: "gd1", type: "text", title: "", x: 10, y: 10, w: 910, h: 70, measureIds: [],
+    text: "## Camada Gold (SQL)\nEsta página usa a tabela **gold_vendas_mensais**, criada no notebook *Introdução ao SQL* com CREATE OR REPLACE TABLE. Rode a célula de novo no notebook para atualizá-la.",
+  },
+  {
+    id: "gd2", type: "slicer", title: "Região", x: 10, y: 90, w: 200, h: 200, measureIds: [],
+    axis: { table: goldTable, column: "regiao" },
+  },
+  {
+    id: "gd6", type: "card", title: "Ticket médio (Gold)", x: 10, y: 300, w: 200, h: 70, measureIds: ["m24"],
+  },
+  {
+    id: "gd3", type: "line", title: "Faturamento mensal x ano anterior", x: 220, y: 90, w: 700, h: 280,
+    axis: { table: goldTable, column: "ano_mes" }, measureIds: ["m21", "m22"], sort: { by: "category", desc: false },
+  },
+  {
+    id: "gd4", type: "stacked", title: "Faturamento por mês e região", x: 10, y: 380, w: 610, h: 300,
+    axis: { table: goldTable, column: "ano_mes" }, legend: { table: goldTable, column: "regiao" }, measureIds: ["m21"],
+  },
+  {
+    id: "gd5", type: "table", title: "Resumo por região", x: 630, y: 380, w: 290, h: 300,
+    axis: { table: goldTable, column: "regiao" }, measureIds: ["m21", "m23", "m24"],
   },
 ];

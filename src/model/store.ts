@@ -1,5 +1,5 @@
 import type {
-  Bookmark, CrossFilter, DrillthroughState, FieldRef, ValueRange, Measure, Page, PaneFilter, QueryStep, Relationship, Report, ReportTheme, Table, Value, Visual,
+  Notebook, Bookmark, CrossFilter, DrillthroughState, FieldRef, ValueRange, Measure, Page, PaneFilter, QueryStep, Relationship, Report, ReportTheme, Table, Value, Visual,
 } from "./types";
 import { tableFromQuery } from "./importers";
 import { sampleReport } from "./sampleData";
@@ -9,6 +9,8 @@ export type Action =
   | { type: "reset"; report: Report }
   | { type: "addTable"; table: Table }
   | { type: "removeTable"; name: string }
+  /** Atualizar (mini-lake): dados novos da fonte, reaplicando as etapas da consulta. */
+  | { type: "refreshTable"; table: Table }
   | { type: "addRelationship"; rel: Relationship }
   | { type: "removeRelationship"; id: string }
   | { type: "upsertColumn"; table: string; name: string; expression: string; oldName?: string }
@@ -38,7 +40,10 @@ export type Action =
   | { type: "setTheme"; theme: ReportTheme }
   | { type: "setPageDrillthrough"; pageId: string; fields: FieldRef[] }
   | { type: "drillthrough"; state: DrillthroughState }
-  | { type: "clearDrillthrough" };
+  | { type: "clearDrillthrough" }
+  | { type: "addNotebook"; notebook: Notebook }
+  | { type: "updateNotebook"; id: string; patch: Partial<Notebook> }
+  | { type: "removeNotebook"; id: string };
 
 export function reducer(state: Report, action: Action): Report {
   switch (action.type) {
@@ -59,6 +64,17 @@ export function reducer(state: Report, action: Action): Report {
         filters: state.filters.filter((f) => f.field.table !== action.name),
         paneFilters: state.paneFilters.filter((f) => f.field.table !== action.name),
       });
+    case "refreshTable": {
+      const fresh = action.table;
+      return materialize({
+        ...state,
+        tables: state.tables.map((t) => {
+          if (t.name !== fresh.name || !fresh.query) return t;
+          // As colunas calculadas do modelo continuam; materialize recalcula.
+          return withSteps({ ...t, query: fresh.query, remote: fresh.remote }, t.query?.steps ?? []);
+        }),
+      });
+    }
     case "addRelationship":
       return materialize({ ...state, relationships: [...state.relationships, action.rel] });
     case "removeRelationship":
@@ -127,6 +143,12 @@ export function reducer(state: Report, action: Action): Report {
         paneFilters: state.paneFilters.filter((f) => !(f.scope === "visual" && f.targetId && ids.has(f.targetId))),
       };
     }
+    case "addNotebook":
+      return { ...state, notebooks: [...(state.notebooks ?? []), action.notebook] };
+    case "updateNotebook":
+      return { ...state, notebooks: (state.notebooks ?? []).map((n) => (n.id === action.id ? { ...n, ...action.patch } : n)) };
+    case "removeNotebook":
+      return { ...state, notebooks: (state.notebooks ?? []).filter((n) => n.id !== action.id) };
     case "toggleFilter": {
       // Clique num ponto de gráfico: alterna o valor; Ctrl/Shift acumula.
       const { filter, multi } = action;
@@ -226,7 +248,8 @@ function withSteps(t: Table, steps: QueryStep[]): Table {
   };
   const rebuilt = tableFromQuery(t.name, { ...query, steps });
   const calculated = t.columns.filter((c) => c.expression && !rebuilt.columns.some((b) => b.name === c.name));
-  return { ...rebuilt, columns: [...rebuilt.columns, ...calculated] };
+  // Preserva o que não vem da consulta (origem SQL do notebook, origem remota do mini-lake).
+  return { ...t, ...rebuilt, columns: [...rebuilt.columns, ...calculated] };
 }
 
 /** Foto do estado atual para um indicador. */
@@ -268,6 +291,8 @@ function mergeKey(action: Action): string | undefined {
     return `visuals:${ids.join(",")}:${keys.join(",")}`;
   }
   if (action.type === "renamePage") return `page:${action.id}`;
+  // Digitar numa célula vira um passo de desfazer por pausa, não por tecla.
+  if (action.type === "updateNotebook") return `notebook:${action.id}:${Object.keys(action.patch).sort().join(",")}`;
   if (action.type === "updatePaneFilter") return `pane:${action.id}`;
   return undefined;
 }

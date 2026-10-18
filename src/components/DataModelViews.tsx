@@ -104,7 +104,13 @@ function AppliedSteps({ table, onChange }: { table: Table; onChange: (steps: Que
   return (
     <aside className="steps">
       <h3>Consulta</h3>
-      <div className="small muted">Fonte: {table.query?.origin ?? "dados do modelo"}</div>
+      <div className="small muted">Fonte: {table.query?.origin ?? (table.sql ? "SQL (notebook)" : "dados do modelo")}</div>
+      {table.sql && (
+        <>
+          <pre className="sql-origin" title="Rode a célula de novo no notebook para atualizar a tabela">{table.sql}</pre>
+          <p className="small muted">Criada por CREATE TABLE … AS num notebook. Para atualizar, rode a célula de novo.</p>
+        </>
+      )}
       <h3>Etapas aplicadas</h3>
       <ol>
         <li className="step source">Fonte</li>

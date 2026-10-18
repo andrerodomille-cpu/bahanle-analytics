@@ -27,6 +27,7 @@ Roda inteiro no navegador: os dados ficam em memória e no `localStorage`
 | **Explorar** | Drill-down, árvore de decomposição, principais influenciadores, histograma e box plot, previsão com faixa de confiança, linhas de referência, modo foco, exportar dados do visual (CSV) |
 | **Apresentar** | Temas claro/escuro, 4 paletas, indicadores (bookmarks) |
 | **Entregar** | Página como PNG, impressão/PDF, **Publicar** como HTML único somente leitura |
+| **Lakehouse** (aba Notebooks) | Notebooks no estilo Databricks com SQL próprio (JOIN, GROUP BY, janelas, CTE), gráfico e plano de execução; `CREATE TABLE … AS` grava tabelas no modelo |
 
 ## Mapa de estudo: conceito do Power BI → código
 
@@ -195,6 +196,69 @@ analisador de desempenho.
   página (faixas de cima para baixo, da esquerda para a direita). No relatório
   publicado, liga sozinho em telas de até 700 px.
 
+### Notebooks e SQL (conceitos do Databricks)
+
+A aba **Notebooks** traz a camada "antes do BI": células de SQL e de texto
+executadas numa sessão, como num notebook do Databricks. O motor SQL
+(`src/engine/sql.ts`) foi escrito do zero e vale estudar em três partes:
+
+1. **Análise léxica e sintática**: texto → tokens → árvore (AST), com mensagens
+   de erro que apontam linha e coluna.
+2. **Otimização**: *predicate pushdown* (um filtro do WHERE que só usa uma
+   tabela desce até a leitura dela, antes das junções, como faz o Catalyst do
+   Spark) e *hash join* (junções por igualdade montam uma tabela hash em vez de
+   comparar todos com todos).
+3. **Execução** operador a operador, medindo linhas e tempo; a aba **Plano** de
+   cada resultado e o comando `EXPLAIN` mostram a árvore.
+
+O que o SQL suporta:
+
+- `SELECT [DISTINCT]`, `FROM` com `JOIN` (INNER, LEFT, RIGHT, FULL, CROSS) e
+  subconsultas, `WHERE`, `GROUP BY` (aceita posição e apelido), `HAVING`,
+  `ORDER BY … NULLS FIRST/LAST`, `LIMIT/OFFSET`, `UNION [ALL]` e `WITH` (CTE).
+- Expressões: `CASE`, `CAST`/`TRY_CAST`, `IN` (lista ou subconsulta),
+  `BETWEEN`, `LIKE`/`ILIKE`, `IS NULL`, lógica de três valores com NULL.
+- Funções de texto, número e data (`DATE_TRUNC`, `DATE_FORMAT`, `DATEDIFF`,
+  `ADD_MONTHS`, `YEAR`…) e agregações (`COUNT(DISTINCT)`, `MEDIAN`, `STDDEV`…).
+- Funções de janela: `ROW_NUMBER`, `RANK`, `DENSE_RANK`, `NTILE`, `LAG`/`LEAD`
+  e agregações com `OVER (PARTITION BY … ORDER BY …)` (acumulado com empates).
+- Comandos: `CREATE [OR REPLACE] TABLE … AS`, `CREATE TEMP VIEW`, `DROP`,
+  `SHOW TABLES`, `DESCRIBE` e `EXPLAIN`.
+
+No notebook:
+
+- **Shift+Enter** executa e vai para a próxima célula; **Ctrl+Enter** executa
+  e fica; `%md` ou `%sql` na primeira linha escolhe a linguagem.
+- Resultado em **tabela**, **gráfico** (colunas, linha, área, rosca, dispersão,
+  com eixos escolhidos e salvos na célula) ou **plano**; ⭳ CSV.
+- **✦ Salvar como tabela** grava o resultado de uma consulta no modelo.
+- O catálogo à esquerda lista tabelas, colunas e visões; clicar insere o nome.
+- **⟲ Reiniciar sessão** apaga as visões temporárias, como reiniciar um cluster.
+
+**Integração com o BI**: uma tabela criada por SQL vira tabela do modelo, com
+campos, medidas e visuais como qualquer outra. O exemplo faz isso de ponta a
+ponta: o notebook *Introdução ao SQL* cria `gold_vendas_mensais` (camada Gold
+da arquitetura medalhão, com acumulado no ano por `SUM … OVER` e ano anterior
+por `LAG(…, 12)`), e a página **Camada Gold (SQL)** usa essa tabela. Na aba
+Dados, a tabela mostra o comando que a gerou.
+
+### Conector mini-lake (Parquet + DuckDB)
+
+O projeto irmão [mini-lake](../mini-lake) extrai o Postgres de produção para
+Parquet (bronze → silver → gold, com DuckDB) e serve as tabelas por HTTP.
+No painel **Dados**:
+
+- **🔌 mini-lake**: informe a URL da API (padrão `http://localhost:8000`) e,
+  se houver, o token; escolha as tabelas (as gold já vêm marcadas) e importe.
+  A opção *Detectar relacionamentos* liga fato e dimensões por colunas com cara
+  de chave (`loja_id`, `ProdutoID`…), únicas de um lado e contidas do outro.
+- **↻ Atualizar**: busca de novo todas as tabelas do mini-lake e **reaplica as
+  etapas** do editor de consultas e as colunas calculadas, como o Atualizar do
+  Power BI.
+
+O token fica só na sessão do navegador (nunca vai para o relatório salvo ou
+publicado). Código em `src/model/lake.ts` e `src/components/LakeConnector.tsx`.
+
 ### Mapas
 
 Os contornos dos estados vêm da malha territorial do **IBGE** (API de malhas,
@@ -224,6 +288,8 @@ HTML publicado.
 
 ### Páginas do exemplo
 
+- **Camada Gold (SQL)** — segmentação, cartão, linha e colunas empilhadas
+  sobre `gold_vendas_mensais`, a tabela criada pelo notebook de exemplo.
 - **Composição e ranking** — colunas 100% (regiões por trimestre), área 100%
   (mix de categorias), ranking das lojas mês a mês, waffle, haltere ano
   anterior → 2026, pictograma de pedidos e dispersão animada por mês.

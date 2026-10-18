@@ -13,9 +13,10 @@ import { MEASURE_SLOTS } from "./components/VisualView";
 import { Menu } from "./components/Menu";
 import { PerfPanel } from "./components/Package4Visuals";
 import { ArrangePane } from "./components/Arrange";
+import { NotebookView } from "./components/Notebook";
 import { expandGroups } from "./engine/arrange";
 
-type Tab = "report" | "data" | "model";
+type Tab = "report" | "data" | "model" | "notebook";
 
 /** Texto de um filtro por intervalo: "entre 10 e 20", "≥ 10", "≤ 20". */
 function summarizeRange(r: ValueRange): string {
@@ -261,7 +262,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
           <strong className="brand">Mini BI</strong>
           {!viewOnly && (
             <nav>
-              {([["report", "Relatório"], ["data", "Dados"], ["model", "Modelo"]] as [Tab, string][]).map(([k, label]) => (
+              {([["report", "Relatório"], ["data", "Dados"], ["model", "Modelo"], ["notebook", "Notebooks"]] as [Tab, string][]).map(([k, label]) => (
                 <button key={k} className={tab === k ? "tab active" : "tab"} onClick={() => setTab(k)}>{label}</button>
               ))}
             </nav>
@@ -426,7 +427,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
         )}
 
         <main className="workspace">
-          {!viewOnly && (
+          {!viewOnly && tab !== "notebook" && (
             <FieldsPane
               report={report}
               dispatch={dispatch}
@@ -532,6 +533,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
               <DataView report={report} dispatch={dispatch} onEditColumn={(table, column) => setEditingColumn({ table, column })} />
             )}
             {tab === "model" && <ModelView report={report} dispatch={dispatch} />}
+            {tab === "notebook" && <NotebookView report={report} dispatch={dispatch} />}
           </section>
           {tab === "report" && (
             selection.length > 1 && !viewOnly

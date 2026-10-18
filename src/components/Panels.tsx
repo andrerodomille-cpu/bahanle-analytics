@@ -12,6 +12,7 @@ import { formatMeasure, formatValue } from "../model/format";
 import { evaluateColumn } from "../model/calculated";
 import { MEASURE_SLOTS, USES_LEGEND } from "./VisualView";
 import { FiltersPane } from "./FiltersPane";
+import { LakeDialog, refreshLakeTables } from "./LakeConnector";
 
 export const VISUAL_TYPES: { type: VisualType; label: string; icon: string }[] = [
   { type: "bar", label: "Colunas", icon: "▮▮" },
@@ -103,6 +104,9 @@ export function FieldsPane({ report, dispatch, onAddVisual, onEditMeasure, onEdi
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [lakeOpen, setLakeOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState<string | null>(null);
+  const hasRemote = report.tables.some((t) => t.remote);
 
   const importFiles = async (files: FileList | null) => {
     setError(null);
@@ -142,6 +146,29 @@ export function FieldsPane({ report, dispatch, onAddVisual, onEditMeasure, onEdi
         hidden
         onChange={(e) => importFiles(e.target.files)}
       />
+      <div className="row-buttons">
+        <button onClick={() => setLakeOpen(true)} title="Tabelas silver/gold do pipeline mini-lake (API HTTP)">🔌 mini-lake</button>
+        {hasRemote && (
+          <button
+            disabled={refreshing === "…"}
+            title="Busca de novo as tabelas do mini-lake e reaplica as etapas da consulta"
+            onClick={async () => {
+              setError(null);
+              setRefreshing("…");
+              try {
+                setRefreshing(await refreshLakeTables(report, dispatch));
+              } catch (e) {
+                setRefreshing(null);
+                setError(e instanceof Error ? e.message : String(e));
+              }
+            }}
+          >
+            ↻ Atualizar
+          </button>
+        )}
+      </div>
+      {refreshing && refreshing !== "…" && <div className="small muted">{refreshing}</div>}
+      {lakeOpen && <LakeDialog report={report} dispatch={dispatch} onClose={() => setLakeOpen(false)} />}
       {error && <div className="error small">{error}</div>}
 
       <ul className="tree">
