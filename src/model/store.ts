@@ -43,12 +43,16 @@ export type Action =
   | { type: "clearDrillthrough" }
   | { type: "addNotebook"; notebook: Notebook }
   | { type: "updateNotebook"; id: string; patch: Partial<Notebook> }
-  | { type: "removeNotebook"; id: string };
+  | { type: "removeNotebook"; id: string }
+  /** Várias ações num passo só de desfazer (ex.: dashboard criado pela IA). */
+  | { type: "batch"; actions: Action[] };
 
 export function reducer(state: Report, action: Action): Report {
   switch (action.type) {
     case "reset":
       return action.report;
+    case "batch":
+      return action.actions.reduce(reducer, state);
     case "addTable":
       return materialize({
         ...state,

@@ -27,7 +27,25 @@ Roda inteiro no navegador: os dados ficam em memória e no `localStorage`
 | **Explorar** | Drill-down, árvore de decomposição, principais influenciadores, histograma e box plot, previsão com faixa de confiança, linhas de referência, modo foco, exportar dados do visual (CSV) |
 | **Apresentar** | Temas claro/escuro, 4 paletas, indicadores (bookmarks) |
 | **Entregar** | Página como PNG, impressão/PDF, **Publicar** como HTML único somente leitura |
+| **Criar com IA** (botão ✨ IA) | Descreva o dashboard em texto ("total de vendas por estado"); um LLM local no Ollama monta página, medidas e visuais |
 | **Lakehouse** (aba Notebooks) | Notebooks no estilo Databricks com SQL próprio (JOIN, GROUP BY, janelas, CTE), gráfico e plano de execução; `CREATE TABLE … AS` grava tabelas no modelo |
+
+## Criar com IA (Ollama)
+
+O botão **✨ IA** abre um chat: peça "total de vendas por estado" ou "dashboard
+de vendas com totais, evolução mensal e top 5 produtos" e a IA cria uma página
+com cartões, gráficos e as medidas que faltarem. Tudo roda no seu computador:
+
+```bash
+ollama pull qwen2.5:7b   # ou llama3.1:8b; modelos de 7B+ acertam bem mais os campos
+ollama serve             # http://localhost:11434 (já libera localhost no CORS)
+```
+
+O LLM não cria nada direto: ele recebe as tabelas, colunas, relacionamentos e
+medidas do modelo e devolve só um **plano em JSON** (o formato é imposto pelo
+`format` do Ollama). O app confere cada coluna e valida cada medida no motor
+mini-DAX; o que falhar volta ao modelo para uma correção. O resultado entra
+como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 
 ## Mapa de estudo: conceito do Power BI → código
 
@@ -55,6 +73,7 @@ Roda inteiro no navegador: os dados ficam em memória e no `localStorage`
 | KPI, cascata, mapa de calor | `src/components/MoreVisuals.tsx` | `waterfallSteps`: base + variações por categoria = total; escala de cores entre mín. e máx. |
 | Texto dinâmico | `fillTemplate` em `src/engine/query.ts` | `[Medida]` avaliada no contexto de filtro da caixa de texto |
 | Mapas | `src/engine/geo.ts`, `src/model/geo/` | Projeção equirretangular, associação valor → UF, contornos do IBGE |
+| Assistente de IA | `src/model/ai.ts`, `src/components/AiAssistant.tsx` | Esquema do modelo no prompt → plano JSON forçado por JSON Schema → validação de campos e medidas → ações num passo só de desfazer |
 | Análises | `src/engine/analytics.ts` | Regressão linear e intervalo de predição, média móvel, quartis e bigodes de Tukey, regra de Sturges, influenciadores, decomposição |
 
 ### Visuais

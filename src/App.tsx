@@ -14,6 +14,7 @@ import { Menu } from "./components/Menu";
 import { PerfPanel } from "./components/Package4Visuals";
 import { ArrangePane } from "./components/Arrange";
 import { NotebookView } from "./components/Notebook";
+import { AiAssistant } from "./components/AiAssistant";
 import { expandGroups } from "./engine/arrange";
 
 type Tab = "report" | "data" | "model" | "notebook";
@@ -113,6 +114,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   const [busy, setBusy] = useState<string | null>(null);
   // Analisador de desempenho: painel aberto, época do motor (cache frio) e tique (cache quente).
   const [perfOpen, setPerfOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [engineEpoch, setEngineEpoch] = useState(0);
   const [renderTick, setRenderTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -352,6 +354,11 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
           )}
 
           {!viewOnly && (
+            <button className={aiOpen ? "active" : ""} title="Criar dashboards descrevendo em texto (IA local no Ollama)" onClick={() => setAiOpen(!aiOpen)}>
+              ✨ IA
+            </button>
+          )}
+          {!viewOnly && (
             <button className={perfOpen ? "active" : ""} title="Analisador de desempenho" onClick={() => {
               setPerfOpen(!perfOpen);
               setTab("report");
@@ -542,6 +549,15 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
           )}
         </main>
 
+        {aiOpen && !viewOnly && (
+          <AiAssistant
+            report={report}
+            pageId={page.id}
+            dispatch={dispatch}
+            onGoToPage={goToPage}
+            onClose={() => setAiOpen(false)}
+          />
+        )}
         {editingColumn && (
           <ColumnEditor
             report={report}

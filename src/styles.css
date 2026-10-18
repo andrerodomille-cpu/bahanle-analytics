@@ -823,3 +823,28 @@ label.check input { width: auto; }
 .lake-name { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .lake-name .badge { margin-left: 6px; font-family: inherit; }
 .lake-done { margin: 8px 0 0; padding-left: 18px; color: #107c10; }
+
+/* Assistente de IA (Criar com IA) */
+.ai-panel { position: fixed; right: 16px; bottom: 16px; width: min(400px, calc(100vw - 32px)); height: min(560px, calc(100vh - 90px)); background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 10px 34px rgba(0, 0, 0, 0.25); display: flex; flex-direction: column; z-index: 9; }
+.ai-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.ai-model { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+.ai-settings { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.ai-settings p { margin: 6px 0 0; }
+.ai-error { padding: 6px 10px; }
+.ai-messages { flex: 1; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ai-empty { display: flex; flex-direction: column; gap: 6px; }
+.ai-example { text-align: left; }
+.ai-msg { padding: 8px 10px; border-radius: 8px; max-width: 92%; line-height: 1.4; }
+.ai-msg ul { margin: 6px 0 0; padding-left: 18px; }
+.ai-msg details { margin-top: 6px; color: var(--muted); }
+.ai-msg.user { align-self: flex-end; background: var(--accent); color: #fff; }
+.ai-msg.assistant { align-self: flex-start; background: color-mix(in srgb, var(--border) 45%, transparent); }
+.ai-msg.error { color: var(--danger); }
+.ai-dots::after { content: "…"; animation: ai-blink 1.2s infinite; }
+@keyframes ai-blink { 50% { opacity: 0.2; } }
+.ai-input { border-top: 1px solid var(--border); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.ai-input textarea { width: 100%; resize: none; box-sizing: border-box; }
+.ai-actions { display: flex; align-items: center; gap: 8px; }
+.ai-actions .check { margin: 0; }
+.ai-actions .check input { width: auto; }
+@media print { .ai-panel { display: none !important; } }
