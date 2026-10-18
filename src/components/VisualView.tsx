@@ -19,7 +19,7 @@ import {
   YAxis,
   ZAxis,
 } from "recharts";
-import type { ButtonAction, CrossFilter, FieldRef, Measure, RefLine, Value, ValueRange, Visual } from "../model/types";
+import type { ButtonAction, CrossFilter, FieldRef, Measure, RefLine, RelativeDate, Value, ValueRange, Visual } from "../model/types";
 import { fieldLabel } from "../model/types";
 import { usePalette } from "../model/theme";
 import type { GridResult, ResultRow, VisualResult } from "../engine/query";
@@ -27,6 +27,11 @@ import { valueKey } from "../engine/query";
 import { formatMeasure, formatValue } from "../model/format";
 import { detectAnomalies, linearForecast, movingForecast, nextLabels, referenceValue } from "../engine/analytics";
 import { DropdownSlicer, ParetoVisual, RangeSlicer, type RangeDomain } from "./Package3Visuals";
+import { FieldParamVisual, FunnelVisual, MultiCardVisual, RelativeDateSlicer, RuledValue } from "./Package4Visuals";
+import {
+  BulletVisual, CalendarVisual, GanttVisual, MultiplesVisual, RadarVisual, SankeyVisual, WhatIfVisual, detailTooltip,
+} from "./LabVisuals";
+import type { CalendarResult, Detail, GanttTask, MultiplesResult } from "../engine/lab";
 import { BoxplotVisual, DecompVisual, HistogramVisual, InfluencersVisual, type Analysis } from "./AnalyticsVisuals";
 import { BubbleMapVisual, ChoroplethVisual, ImageVisual } from "./GeoVisuals";
 import type { BubbleResult, ChoroplethResult } from "../engine/geo";
@@ -56,6 +61,13 @@ export const MEASURE_SLOTS: Partial<Record<Visual["type"], string[]>> = {
   decomp: ["Analisar"],
   map: ["Cor"],
   pareto: ["Valores"],
+  funnel: ["Valores"],
+  fieldparam: [],
+  bullet: ["Valor", "Meta (opcional)"],
+  calendar: ["Valores"],
+  whatif: [],
+  sankey: ["Valores"],
+  gantt: [],
   narrative: ["Medida", "Comparar com (opcional)"],
   bubblemap: ["Tamanho", "Cor (opcional)"],
   image: [],
@@ -63,14 +75,15 @@ export const MEASURE_SLOTS: Partial<Record<Visual["type"], string[]>> = {
 
 /** Visuais que não usam eixo (ou em que ele é opcional). */
 export const NO_AXIS: Visual["type"][] = [
-  "card", "gauge", "kpi", "text", "button", "image", "histogram", "influencers", "decomp", "narrative",
+  "card", "gauge", "kpi", "text", "button", "image", "histogram", "influencers", "decomp", "narrative", "fieldparam",
+  "bullet", "whatif",
 ];
 
 /** Visuais que não usam medida. */
-const NO_MEASURE: Visual["type"][] = ["slicer", "histogram", "boxplot", "text", "button", "image"];
+const NO_MEASURE: Visual["type"][] = ["slicer", "histogram", "boxplot", "text", "button", "image", "fieldparam", "whatif", "gantt"];
 
 /** Visuais que usam o campo de legenda / colunas. */
-export const USES_LEGEND: Visual["type"][] = ["stacked", "matrix", "heatmap"];
+export const USES_LEGEND: Visual["type"][] = ["stacked", "matrix", "heatmap", "sankey"];
 
 interface Props {
   visual: Visual;
@@ -98,6 +111,13 @@ interface Props {
   /** Segmentação "entre": mínimo e máximo do campo, e como aplicar o intervalo. */
   rangeDomain?: RangeDomain;
   onSetRange: (range: ValueRange | null) => void;
+  /** Segmentação de data relativa: guarda a escolha e aplica o intervalo. */
+  onSetRelative: (spec: RelativeDate | undefined, range: ValueRange | null) => void;
+  /** Resultados dos visuais do laboratório. */
+  lab?: { kind: "multiples"; result: MultiplesResult } | { kind: "calendar"; result: CalendarResult } | { kind: "gantt"; tasks: GanttTask[] };
+  /** Dica de ferramenta com detalhes: por rótulo da categoria. */
+  details?: Map<string, Detail>;
+  detailExtras?: Measure[];
 }
 
 const isMulti = (e?: { ctrlKey?: boolean; shiftKey?: boolean; metaKey?: boolean }) =>
@@ -111,6 +131,8 @@ export function VisualView(props: Props) {
     return <TextVisual text={props.text ?? visual.text ?? ""} align={visual.textAlign} size={visual.textSize} />;
   }
   if (visual.type === "image") return <ImageVisual visual={visual} />;
+  if (visual.type === "fieldparam") return <FieldParamVisual visual={visual} onUpdate={props.onUpdate} />;
+  if (visual.type === "whatif") return <WhatIfVisual visual={visual} onUpdate={props.onUpdate} />;
   if (visual.type === "narrative" && measures.length > 0) {
     return <TextVisual text={props.text ?? ""} align={visual.textAlign} size={visual.textSize ?? "s"} />;
   }
@@ -125,6 +147,8 @@ export function VisualView(props: Props) {
     return <div className="visual-msg">Adicione ao menos uma medida.</div>;
   if (visual.type === "scatter" && measures.length < 2)
     return <div className="visual-msg">A dispersão precisa de duas medidas: X e Y.</div>;
+  if (visual.type === "sankey" && !visual.legend)
+    return <div className="visual-msg">Escolha o campo de destino no painel à direita.</div>;
   if (result.rows.length === 0 && !NO_AXIS.includes(visual.type) && visual.type !== "boxplot")
     return <div className="visual-msg">Sem dados para os filtros atuais.</div>;
 
@@ -142,6 +166,13 @@ export function VisualView(props: Props) {
       return a?.kind === "influencers" ? <InfluencersVisual {...common} result={a.result} /> : null;
     case "decomp":
       return a?.kind === "decomp" ? <DecompVisual {...common} result={a.result} /> : null;
+    case "multicard":
+      return (
+        <MultiCardVisual visual={visual} rows={orderRows(visual, result.rows)} measures={measures}
+          selected={props.selected} onSelect={props.onSelect} />
+      );
+    case "funnel":
+      return <FunnelVisual rows={orderRows(visual, result.rows)} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
     case "pareto":
       return <ParetoVisual rows={result.rows} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
     case "map":
@@ -177,7 +208,32 @@ export function VisualView(props: Props) {
     case "hbar":
     case "line":
     case "area":
+      if (visual.multiples && props.lab?.kind === "multiples") {
+        return <MultiplesVisual visual={visual} result={props.lab.result} measures={measures} selected={props.selected} onSelect={props.onSelect} />;
+      }
       return <CartesianVisual {...props} />;
+    case "bullet":
+      return (
+        <BulletVisual
+          visual={visual}
+          rows={visual.axis ? orderRows(visual, result.rows) : [{ category: null, values: props.totals }]}
+          measures={measures}
+          selected={props.selected}
+          onSelect={props.onSelect}
+        />
+      );
+    case "radar":
+      return <RadarVisual visual={visual} rows={orderRows({ ...visual, sort: visual.sort ?? { by: "category", desc: false } }, result.rows)} measures={measures} onSelect={props.onSelect} />;
+    case "calendar":
+      return props.lab?.kind === "calendar"
+        ? <CalendarVisual visual={visual} result={props.lab.result} measures={measures} selected={props.selected} onSelect={props.onSelect} onUpdate={props.onUpdate} />
+        : null;
+    case "sankey":
+      return grid ? <SankeyVisual visual={visual} grid={grid} measures={measures} onSelect={props.onSelect} /> : null;
+    case "gantt":
+      return props.lab?.kind === "gantt"
+        ? <GanttVisual visual={visual} tasks={props.lab.tasks} selected={props.selected} onSelect={props.onSelect} />
+        : null;
     case "stacked":
       return <StackedVisual {...props} />;
     case "scatter":
@@ -191,11 +247,14 @@ export function VisualView(props: Props) {
 
 // ---------------- Cartão e medidor ----------------
 
-function CardVisual({ result, measures }: Props) {
+function CardVisual({ visual, result, measures }: Props) {
   const m = measures[0];
   return (
     <div className="card-visual">
-      <div className="card-value">{formatMeasure(result.rows[0]?.values[0] ?? null, m.format)}</div>
+      <div className="card-value">
+        <RuledValue rules={visual.rules} measure={0} value={result.rows[0]?.values[0] ?? null}
+          text={formatMeasure(result.rows[0]?.values[0] ?? null, m.format)} />
+      </div>
       <div className="card-label">{m.name}</div>
     </div>
   );
@@ -247,7 +306,14 @@ function GaugeVisual({ visual, result, measures }: Props) {
 
 // ---------------- Segmentação ----------------
 
-function SlicerVisual({ visual, result, selected, onSetValues, rangeDomain, ownFilter, onSetRange }: Props) {
+function SlicerVisual({ visual, result, selected, onSetValues, rangeDomain, ownFilter, onSetRange, onSetRelative }: Props) {
+  if (visual.slicerStyle === "relative") {
+    const maxDate = rangeDomain?.isDate ? String(rangeDomain.max) : null;
+    // A escolha salva só vale se o filtro dela estiver ativo (filtros cruzados
+    // são limpos ao publicar ou reabrir o relatório).
+    const shown = ownFilter?.range ? visual : { ...visual, relative: undefined };
+    return <RelativeDateSlicer visual={shown} maxDate={maxDate} onChange={onSetRelative} />;
+  }
   if (visual.slicerStyle === "between") {
     return rangeDomain
       ? <RangeSlicer domain={rangeDomain} current={ownFilter?.range} onChange={onSetRange} />
@@ -334,7 +400,7 @@ function TableVisual({ visual, result, totals, measures, selected, onSelect, onU
               <td>{formatValue(r.category)}</td>
               {r.values.map((v, i) => (
                 <td key={i} className="num" style={cellStyle(v, i)}>
-                  {formatMeasure(v, measures[i].format)}
+                  <RuledValue rules={visual.rules} measure={i} value={v} text={formatMeasure(v, measures[i].format)} />
                 </td>
               ))}
             </tr>
@@ -372,7 +438,7 @@ function MatrixVisual({ visual, grid, measures, selected, onSelect }: Props) {
   const cells = (col: string, vals: (number | null)[] | undefined, formatted = false) =>
     measures.map((m, i) => (
       <td key={`${col}-${m.id}`} className="num" style={formatted ? cellStyle(vals?.[i] ?? null, i) : undefined}>
-        {formatMeasure(vals?.[i] ?? null, m.format)}
+        <RuledValue rules={visual.rules} measure={i} value={vals?.[i] ?? null} text={formatMeasure(vals?.[i] ?? null, m.format)} />
       </td>
     ));
 
@@ -429,7 +495,7 @@ function measureTooltip(measures: Measure[], fallback?: Measure) {
   );
 }
 
-function CartesianVisual({ visual, result, measures, selected, onSelect }: Props) {
+function CartesianVisual({ visual, result, measures, selected, onSelect, details, detailExtras }: Props) {
   const PALETTE = usePalette();
   const rows = orderRows(visual, result.rows);
   const data: Record<string, unknown>[] = toChartData(rows, measures);
@@ -443,7 +509,7 @@ function CartesianVisual({ visual, result, measures, selected, onSelect }: Props
     if (i !== undefined && rows[i]) onSelect(rows[i].category, isMulti(e));
   };
   const legend = (measures.length > 1 || visual.forecast) && <Legend wrapperStyle={{ fontSize: 11 }} />;
-  const tooltip = (
+  const tooltip = details ? <Tooltip content={detailTooltip(details, measures, detailExtras ?? [])} /> : (
     <Tooltip
       formatter={(v: number | number[], name: string) => {
         const m = measures.find((x) => x.name === name) ?? measures[0];
@@ -662,7 +728,7 @@ function ScatterVisual({ visual, result, measures, selected, onSelect }: Props) 
 
 // ---------------- Rosca e treemap ----------------
 
-function PieVisual({ visual, result, measures, selected, onSelect }: Props) {
+function PieVisual({ visual, result, measures, selected, onSelect, details, detailExtras }: Props) {
   const PALETTE = usePalette();
   const m = measures[0];
   const rows = orderRows(visual, result.rows).filter((r) => (r.values[0] ?? 0) > 0);
@@ -682,7 +748,9 @@ function PieVisual({ visual, result, measures, selected, onSelect }: Props) {
         >
           {data.map((d, i) => <Cell key={d.name} fill={PALETTE[i % PALETTE.length]} fillOpacity={dim(d.category) ? 0.3 : 1} />)}
         </Pie>
-        <Tooltip formatter={(v: number) => formatMeasure(v, m.format)} />
+        {details
+          ? <Tooltip content={detailTooltip(details, measures, detailExtras ?? [])} />
+          : <Tooltip formatter={(v: number) => formatMeasure(v, m.format)} />}
       </PieChart>
     </ResponsiveContainer>
   );

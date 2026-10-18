@@ -11,6 +11,7 @@ import { ColumnEditor, FieldsPane, MeasureEditor, PropertiesPane, VISUAL_TYPES }
 import { DataView, ModelView } from "./components/DataModelViews";
 import { MEASURE_SLOTS } from "./components/VisualView";
 import { Menu } from "./components/Menu";
+import { PerfPanel } from "./components/Package4Visuals";
 
 type Tab = "report" | "data" | "model";
 
@@ -52,13 +53,22 @@ const SIZES: Partial<Record<VisualType, [number, number]>> = {
   map: [450, 420],
   bubblemap: [450, 420],
   image: [200, 120],
+  multicard: [450, 300],
+  funnel: [450, 300],
+  fieldparam: [450, 50],
+  bullet: [450, 200],
+  radar: [450, 320],
+  calendar: [910, 230],
+  whatif: [300, 110],
+  sankey: [450, 320],
+  gantt: [600, 320],
   pareto: [450, 300],
   narrative: [450, 200],
 };
 
 /** Quantas medidas um visual novo já recebe. */
 const DEFAULT_MEASURES: Partial<Record<VisualType, number>> = {
-  scatter: 2, combo: 2, text: 0, button: 0, slicer: 0, histogram: 0, boxplot: 0, image: 0,
+  scatter: 2, combo: 2, text: 0, button: 0, slicer: 0, histogram: 0, boxplot: 0, image: 0, fieldparam: 0, multicard: 2, whatif: 0, gantt: 0, radar: 3,
 };
 
 /**
@@ -79,6 +89,10 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   const [editingColumn, setEditingColumn] = useState<{ table: string | null; column: Column | null } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Analisador de desempenho: painel aberto, época do motor (cache frio) e tique (cache quente).
+  const [perfOpen, setPerfOpen] = useState(false);
+  const [engineEpoch, setEngineEpoch] = useState(0);
+  const [renderTick, setRenderTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Salva automaticamente (com atraso, para não gravar a cada pixel arrastado).
@@ -291,6 +305,14 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
             </Menu>
           )}
 
+          {!viewOnly && (
+            <button className={perfOpen ? "active" : ""} title="Analisador de desempenho" onClick={() => {
+              setPerfOpen(!perfOpen);
+              setTab("report");
+            }}>
+              ⏱ Desempenho
+            </button>
+          )}
           <Menu label="Arquivo ▾" align="right">
             {!viewOnly && (
               <>
@@ -396,6 +418,8 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
                   selectedId={selectedId}
                   onSelectVisual={setSelectedId}
                   readOnly={viewOnly}
+                  engineEpoch={engineEpoch}
+                  renderTick={renderTick}
                   onAction={runAction}
                   onDrillthrough={(targetId, field, value) => {
                     dispatch({ type: "drillthrough", state: { pageId: targetId, field, value, fromPageId: page.id } });
@@ -449,6 +473,14 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
                   {!viewOnly && <button className="page-tab add" title="Nova página" onClick={addPage}>+</button>}
                 </div>
               </>
+            )}
+            {tab === "report" && perfOpen && (
+              <PerfPanel
+                visualIds={new Set(report.visuals.filter((v) => v.pageId === page.id).map((v) => v.id))}
+                onRefreshCold={() => setEngineEpoch((n) => n + 1)}
+                onRefreshWarm={() => setRenderTick((n) => n + 1)}
+                onClose={() => setPerfOpen(false)}
+              />
             )}
             {tab === "data" && (
               <DataView report={report} dispatch={dispatch} onEditColumn={(table, column) => setEditingColumn({ table, column })} />

@@ -131,16 +131,59 @@ export function sampleReport(): Report {
     rows: vendas,
   };
 
+  // Funil de vendas do ano (etapas comerciais), para o visual de funil.
+  const tFunil: Table = {
+    name: "Funil",
+    columns: [
+      { name: "Etapa", type: "text" },
+      { name: "Ordem", type: "number" },
+      { name: "Quantidade", type: "number" },
+    ],
+    rows: [
+      ["1. Visitantes", 1, 52_000], ["2. Leads", 2, 18_400], ["3. Propostas", 3, 7_900],
+      ["4. Negociação", 4, 4_100], ["5. Vendas", 5, 2_357],
+    ].map(([Etapa, Ordem, Quantidade]) => ({ Etapa, Ordem, Quantidade })) as Row[],
+  };
+
+  // Metas de 2026 por região (lado "um" do relacionamento com Lojas[Região]).
+  const tMetas: Table = {
+    name: "Metas",
+    columns: [{ name: "Região", type: "text" }, { name: "Meta", type: "number" }],
+    rows: [
+      { Região: "Sudeste", Meta: 3_600_000 }, { Região: "Nordeste", Meta: 2_000_000 }, { Região: "Sul", Meta: 1_900_000 },
+    ],
+  };
+
+  // Cronograma de um projeto (abertura de uma loja), para o Gantt.
+  const tProjetos: Table = {
+    name: "Projetos",
+    columns: [
+      { name: "Tarefa", type: "text" }, { name: "Área", type: "text" },
+      { name: "Início", type: "date" }, { name: "Fim", type: "date" }, { name: "Concluído", type: "number" },
+    ],
+    rows: ([
+      ["1. Estudo de mercado", "Planejamento", "2026-07-01", "2026-07-31", 1],
+      ["2. Contrato do ponto", "Jurídico", "2026-08-01", "2026-08-20", 1],
+      ["3. Reforma da loja", "Obras", "2026-08-21", "2026-10-31", 0.7],
+      ["4. Contratação da equipe", "Pessoas", "2026-09-15", "2026-10-30", 0.5],
+      ["5. Compra de estoque", "Compras", "2026-10-15", "2026-11-25", 0.2],
+      ["6. Treinamento", "Pessoas", "2026-11-01", "2026-11-20", 0],
+      ["7. Campanha de lançamento", "Marketing", "2026-11-10", "2026-12-05", 0],
+      ["8. Inauguração", "Planejamento", "2026-12-01", "2026-12-05", 0],
+    ] as [string, string, string, string, number][]).map(([Tarefa, Área, Início, Fim, Concluído]) => ({ Tarefa, Área, Início, Fim, Concluído })),
+  };
+
   const ano2026 = (id: string, targetId: string): PaneFilter => ({
     id, scope: "visual", targetId, field: { table: "Calendário", column: "Ano" }, values: [2026],
   });
 
   const report: Report = {
-    tables: [tVendas, tProdutos, tLojas, tCalendario],
+    tables: [tVendas, tProdutos, tLojas, tCalendario, tFunil, tMetas, tProjetos],
     relationships: [
       { id: "r1", from: { table: "Vendas", column: "ProdutoID" }, to: { table: "Produtos", column: "ProdutoID" } },
       { id: "r2", from: { table: "Vendas", column: "LojaID" }, to: { table: "Lojas", column: "LojaID" } },
       { id: "r3", from: { table: "Vendas", column: "Data" }, to: { table: "Calendário", column: "Data" } },
+      { id: "r4", from: { table: "Lojas", column: "Região" }, to: { table: "Metas", column: "Região" } },
     ],
     measures: [
       { id: "m1", name: "Faturamento", table: "Vendas", expression: "SUM(Vendas[Valor])", format: "currency" },
@@ -187,6 +230,17 @@ export function sampleReport(): Report {
         id: "m14", name: "Ticket Médio Ano Anterior", table: "Vendas", format: "currency",
         expression: "CALCULATE([Ticket Médio], SAMEPERIODLASTYEAR(Calendário[Data]))",
       },
+      { id: "m15", name: "Oportunidades", table: "Funil", expression: "SUM(Funil[Quantidade])", format: "number" },
+      { id: "m18", name: "Meta", table: "Metas", expression: "SUM(Metas[Meta])", format: "currency" },
+      // Simulação: [Aumento de preço] e [Elasticidade] são parâmetros "e se" (página Simulação e projetos).
+      {
+        id: "m19", name: "Pedidos simulados", table: "Vendas", format: "number",
+        expression: "[Pedidos] * (1 - [Elasticidade] * [Aumento de preço])",
+      },
+      {
+        id: "m20", name: "Faturamento simulado", table: "Vendas", format: "currency",
+        expression: "[Faturamento] * (1 + [Aumento de preço]) * (1 - [Elasticidade] * [Aumento de preço])",
+      },
     ],
     pages: [
       { id: "p5", name: "Executivo" },
@@ -198,6 +252,9 @@ export function sampleReport(): Report {
       { id: "p7", name: "Geografia" },
       { id: "p8", name: "Exploração" },
       { id: "p9", name: "Detalhe do produto", drillthrough: [{ table: "Produtos", column: "Produto" }] },
+      { id: "p10", name: "Monitoramento" },
+      { id: "p11", name: "Laboratório" },
+      { id: "p12", name: "Simulação e projetos" },
     ],
     visuals: [
       ...overview.map((v) => ({ ...v, pageId: "p1" })),
@@ -209,12 +266,20 @@ export function sampleReport(): Report {
       ...geography.map((v) => ({ ...v, pageId: "p7" })),
       ...exploration.map((v) => ({ ...v, pageId: "p8" })),
       ...productDetail.map((v) => ({ ...v, pageId: "p9" })),
+      ...monitoring.map((v) => ({ ...v, pageId: "p10" })),
+      ...lab.map((v) => ({ ...v, pageId: "p11" })),
+      ...simulation.map((v) => ({ ...v, pageId: "p12" })),
     ],
-    filters: [],
+    // A segmentação relativa da página Monitoramento começa em "Este ano" (2026).
+    filters: [{
+      field: { table: "Calendário", column: "Data" }, values: [],
+      range: { min: "2026-01-01", max: "2026-12-31" }, sourceVisualId: "r1",
+    }],
     paneFilters: [
       ano2026("f1", "d1"), ano2026("f2", "t1"), ano2026("f3", "t5"), ano2026("f4", "t6"),
       // Página Executivo: tudo em 2026 (filtro de página).
       { ...ano2026("f5", "p5"), scope: "page" },
+      ano2026("f6", "lb1"),
     ],
     bookmarks: [],
     theme: { mode: "light", palette: "padrao" },
@@ -516,5 +581,99 @@ const productDetail: Draft[] = [
   {
     id: "dp5", type: "map", title: "Faturamento por estado", x: 320, y: 390, w: 600, h: 300,
     axis: { table: "Lojas", column: "UF" }, measureIds: ["m1"],
+  },
+];
+
+/** Regras do crescimento: ≥ 20% bom, entre 0 e 20% atenção, negativo ruim. */
+const growthRules = (measure: number): Visual["rules"] => [
+  { id: `g${measure}a`, measure, op: ">=", value: 0.2, style: "good", icon: true },
+  { id: `g${measure}b`, measure, op: "<", value: 0, style: "bad", icon: true },
+  { id: `g${measure}c`, measure, op: "between", value: 0, value2: 0.2, style: "warn", icon: true },
+];
+
+const monitoring: Draft[] = [
+  {
+    id: "r1", type: "slicer", title: "Período (relativo)", x: 10, y: 10, w: 450, h: 90,
+    axis: { table: "Calendário", column: "Data" }, slicerStyle: "relative", measureIds: [],
+    relative: { kind: "this", unit: "year", anchor: "data" },
+  },
+  {
+    id: "r2", type: "fieldparam", title: "Ver por", x: 470, y: 10, w: 450, h: 90, measureIds: [],
+    paramFields: [
+      { table: "Lojas", column: "Região" }, { table: "Lojas", column: "Loja" },
+      { table: "Produtos", column: "Categoria" }, { table: "Produtos", column: "Produto" },
+    ],
+    paramIndex: 0,
+  },
+  {
+    id: "r3", type: "bar", title: "Faturamento (eixo pelo parâmetro)", x: 10, y: 110, w: 450, h: 300,
+    axis: { table: "Lojas", column: "Região" }, axisParam: "r2", measureIds: ["m1"],
+  },
+  {
+    id: "r4", type: "multicard", title: "Resultado x ano anterior", x: 470, y: 110, w: 450, h: 300,
+    axis: { table: "Lojas", column: "Região" }, axisParam: "r2", measureIds: ["m1", "m9"], rules: growthRules(1),
+  },
+  {
+    id: "r5", type: "funnel", title: "Funil comercial", x: 10, y: 420, w: 450, h: 300,
+    axis: { table: "Funil", column: "Etapa" }, measureIds: ["m15"],
+  },
+  {
+    id: "r6", type: "table", title: "Produtos: crescimento com regras", x: 470, y: 420, w: 450, h: 300,
+    axis: { table: "Produtos", column: "Produto" }, measureIds: ["m1", "m9"], rules: growthRules(1),
+  },
+];
+
+const lab: Draft[] = [
+  {
+    id: "lb1", type: "bullet", title: "2026: faturamento x meta por região", x: 10, y: 10, w: 450, h: 200,
+    axis: { table: "Metas", column: "Região" }, measureIds: ["m1", "m18"], bands: [0.6, 0.9],
+  },
+  {
+    id: "lb2", type: "radar", title: "Categorias em três medidas (escala relativa)", x: 470, y: 10, w: 450, h: 300,
+    axis: { table: "Produtos", column: "Categoria" }, measureIds: ["m1", "m2", "m3"],
+  },
+  {
+    id: "lb3", type: "line", title: "Faturamento mensal — pequenos múltiplos por região", x: 10, y: 220, w: 450, h: 300,
+    axis: { table: "Calendário", column: "Mês" }, measureIds: ["m1"], multiples: { table: "Lojas", column: "Região" },
+  },
+  {
+    id: "lb4", type: "bar", title: "Faturamento por categoria (passe o mouse)", x: 470, y: 320, w: 450, h: 200,
+    axis: { table: "Produtos", column: "Categoria" }, measureIds: ["m1"],
+    tooltipMeasures: ["m2", "m3"], tooltipTrend: { table: "Calendário", column: "Mês" },
+  },
+  {
+    id: "lb5", type: "calendar", title: "Pedidos por dia", x: 10, y: 530, w: 910, h: 230,
+    axis: { table: "Calendário", column: "Data" }, measureIds: ["m2"],
+  },
+];
+
+const simulation: Draft[] = [
+  {
+    id: "sm1", type: "whatif", title: "E se o preço subir…", x: 10, y: 10, w: 300, h: 110, measureIds: [],
+    whatif: { name: "Aumento de preço", min: 0, max: 0.3, step: 0.01, value: 0.1, format: "percent" },
+  },
+  {
+    id: "sm2", type: "whatif", title: "…e a demanda reagir assim (elasticidade)", x: 320, y: 10, w: 300, h: 110, measureIds: [],
+    whatif: { name: "Elasticidade", min: 0, max: 3, step: 0.1, value: 1.2, format: "number" },
+  },
+  {
+    id: "sm3", type: "kpi", title: "Faturamento simulado", x: 630, y: 10, w: 290, h: 170, measureIds: ["m20", "m1"],
+  },
+  {
+    id: "sm4", type: "bar", title: "Atual x simulado por categoria", x: 10, y: 130, w: 610, h: 240,
+    axis: { table: "Produtos", column: "Categoria" }, measureIds: ["m1", "m20"],
+  },
+  {
+    id: "sm5", type: "kpi", title: "Pedidos simulados", x: 630, y: 190, w: 290, h: 180, measureIds: ["m19", "m2"],
+  },
+  {
+    id: "sm6", type: "sankey", title: "Faturamento: região → categoria", x: 10, y: 380, w: 450, h: 320,
+    axis: { table: "Lojas", column: "Região" }, legend: { table: "Produtos", column: "Categoria" }, measureIds: ["m1"],
+  },
+  {
+    id: "sm7", type: "gantt", title: "Projeto: nova loja em Campinas", x: 470, y: 380, w: 450, h: 320, measureIds: [],
+    axis: { table: "Projetos", column: "Tarefa" }, legend: { table: "Projetos", column: "Área" },
+    startField: { table: "Projetos", column: "Início" }, endField: { table: "Projetos", column: "Fim" },
+    progressField: { table: "Projetos", column: "Concluído" },
   },
 ];

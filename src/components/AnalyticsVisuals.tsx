@@ -28,7 +28,7 @@ const num = (v: number) => formatMeasure(v, "number", true);
 const multi = (e: React.MouseEvent) => e.ctrlKey || e.shiftKey || e.metaKey;
 
 /** Tamanho do contêiner, para desenhar SVG sem distorcer textos. */
-function useSize<T extends HTMLElement>() {
+export function useSize<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {

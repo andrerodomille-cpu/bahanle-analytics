@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "./expr";
-import { Engine, axisOf, contextFor, hierarchyOf, runGrid, runVisual, valueKey } from "./query";
+import { Engine, axisOf, contextFor, hierarchyOf, runGrid, runVisual, valueKey, whatIfParams } from "./query";
 import type { Report, Table, Visual } from "../model/types";
 import { captureBookmark, reducer } from "../model/store";
 import { datePart, parseDate, shiftDate } from "../model/dates";
@@ -245,7 +245,7 @@ describe("publicação", () => {
 describe("relatório de exemplo", () => {
   it("todas as medidas calculam sem erro e o crescimento faz sentido", () => {
     const r = sampleReport();
-    const engine = new Engine(r);
+    const engine = new Engine({ ...r, params: whatIfParams(r) });
     for (const m of r.measures) expect(() => engine.evaluateMeasure(m, [])).not.toThrow();
     const y2026 = [only("Calendário", "Ano", 2026)];
     const growth = engine.evaluateMeasure(r.measures.find((m) => m.name === "Crescimento %")!, y2026)!;
@@ -257,7 +257,7 @@ describe("relatório de exemplo", () => {
 
   it("todos os visuais do exemplo rodam sem erro", () => {
     const r = sampleReport();
-    const engine = new Engine(r);
+    const engine = new Engine({ ...r, params: whatIfParams(r) });
     for (const v of r.visuals) {
       expect(runVisual(engine, r, v).error, v.title).toBeUndefined();
       if (v.legend) expect(runGrid(engine, r, v).error, v.title).toBeUndefined();

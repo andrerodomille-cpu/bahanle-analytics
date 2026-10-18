@@ -504,3 +504,120 @@ label.check input { width: auto; }
 .page-tab { white-space: nowrap; flex-shrink: 0; }
 .pagebar { overflow-x: auto; }
 .chart-note.anomaly-note { bottom: auto; top: 4px; }
+
+/* ---------- Regras de formatação ---------- */
+.ruled { font-weight: 600; }
+.rule-icon { font-size: 0.85em; }
+
+/* ---------- Cartão de várias linhas ---------- */
+.multicard { height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+.multicard-row { text-align: left; border: 1px solid var(--border); border-left: 4px solid; border-radius: 4px; padding: 6px 10px; }
+.multicard-row:hover { background: var(--hover); }
+.multicard-row.dim { opacity: 0.35; }
+.multicard-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.multicard-values { display: flex; gap: 18px; flex-wrap: wrap; }
+.multicard-value { font-size: 18px; font-weight: 600; }
+.multicard-label { font-size: 11px; color: var(--muted); }
+
+/* ---------- Funil ---------- */
+.funnel { height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
+.funnel-step { display: grid; grid-template-columns: 110px 1fr; grid-template-rows: auto auto; gap: 0 8px; border: none; background: transparent; padding: 2px 0; text-align: left; }
+.funnel-step:hover { background: var(--hover); }
+.funnel-step.dim { opacity: 0.35; }
+.funnel-label { grid-row: 1 / 3; align-self: center; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.funnel-bar-wrap { display: flex; justify-content: center; }
+.funnel-bar { display: block; color: #fff; font-size: 11px; font-weight: 600; text-align: center; padding: 3px 0; border-radius: 3px; min-width: 40px; }
+.funnel-pct { font-size: 10px; text-align: center; }
+
+/* ---------- Parâmetro de campo ---------- */
+.fieldparam { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; height: 100%; }
+.fieldparam button { border-radius: 14px; padding: 4px 12px; font-size: 12px; }
+.fieldparam button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ---------- Segmentação relativa ---------- */
+.relative-slicer { display: flex; flex-direction: column; gap: 6px; }
+.relative-slicer .field-row { display: flex; gap: 6px; }
+.relative-slicer input[type="number"] { width: 70px; }
+.inline-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.inline-check input { width: auto; }
+
+/* ---------- Painel de Filtros: intervalo ---------- */
+.filter-mode { display: flex; gap: 4px; }
+.filter-mode button { flex: 1; padding: 3px; font-size: 12px; }
+.filter-mode button.on { background: var(--selected); border-color: var(--accent); }
+.filter-range { display: flex; align-items: center; gap: 6px; }
+.filter-range input { flex: 1; min-width: 0; }
+
+/* ---------- Analisador de desempenho ---------- */
+.perf-panel { border-top: 2px solid var(--accent); background: var(--surface); max-height: 42%; display: flex; flex-direction: column; }
+.perf-head { display: flex; align-items: center; gap: 10px; padding: 6px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.perf-head button { font-size: 12px; }
+.perf-body { overflow: auto; padding: 0 12px 8px; }
+.perf-body tfoot td { font-weight: 600; border-top: 2px solid var(--text); }
+.topbar button.active { border-color: #f2c811; color: #f2c811; }
+
+/* ---------- Marcador (bullet) ---------- */
+.bullet { height: 100%; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.bullet-row { display: grid; grid-template-columns: 90px 1fr 110px; align-items: center; gap: 8px; border: none; background: transparent; padding: 2px 0; text-align: left; }
+.bullet-row:hover { background: var(--hover); }
+.bullet-row.dim { opacity: 0.35; }
+.bullet-label { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bullet-track { position: relative; height: 22px; }
+.bullet-band { position: absolute; left: 0; top: 0; bottom: 0; }
+.bullet-band.b3 { background: var(--border); opacity: 0.5; }
+.bullet-band.b2 { background: var(--border); opacity: 0.9; }
+.bullet-band.b1 { background: var(--muted); opacity: 0.45; }
+.bullet-bar { position: absolute; left: 0; top: 7px; height: 8px; border-radius: 1px; }
+.bullet-target { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1px; background: var(--text); }
+.bullet-value { font-size: 12px; font-weight: 600; }
+.bullet-value .good { color: #2e9d47; }
+.bullet-value .warn { color: #d9a300; }
+.bullet-value .bad { color: #d64550; }
+
+/* ---------- Pequenos múltiplos ---------- */
+.multiples { height: 100%; display: grid; gap: 6px; grid-auto-rows: 1fr; }
+.multiple { border: 1px solid var(--border); border-radius: 4px; display: flex; flex-direction: column; min-height: 0; padding: 2px 4px; }
+.multiple-title { display: flex; justify-content: space-between; font-size: 11px; font-weight: 600; }
+.multiple-chart { flex: 1; min-height: 0; }
+
+/* ---------- Calendário de calor ---------- */
+.calendar { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+.calendar-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.calendar-head button { padding: 0 8px; }
+.calendar-body { flex: 1; min-height: 0; }
+.cal-label { fill: var(--muted); font-size: 9px; }
+.cal-day { cursor: pointer; }
+.cal-day.empty { fill: var(--map-empty); cursor: default; }
+.cal-day:hover { stroke: var(--text); stroke-width: 1; }
+
+/* ---------- Parâmetro "e se" ---------- */
+.whatif { height: 100%; display: flex; flex-direction: column; justify-content: center; gap: 6px; }
+.whatif-value { font-size: 26px; font-weight: 600; text-align: center; }
+.whatif input[type="range"] { width: 100%; padding: 0; border: none; accent-color: var(--accent); }
+.whatif-ends { display: flex; justify-content: space-between; gap: 6px; }
+
+/* ---------- Sankey ---------- */
+.sankey-label { fill: var(--text); font-size: 11px; }
+
+/* ---------- Gantt ---------- */
+.gantt { height: 100%; display: flex; flex-direction: column; min-height: 0; font-size: 12px; }
+.gantt-rows { flex: 1; overflow-y: auto; }
+.gantt-row { display: grid; grid-template-columns: 150px 1fr; align-items: center; width: 100%; border: none; background: transparent; padding: 3px 0; text-align: left; }
+.gantt-row:hover { background: var(--hover); }
+.gantt-row.dim { opacity: 0.35; }
+.gantt-head { font-size: 10px; color: var(--muted); }
+.gantt-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+.gantt-track { position: relative; height: 18px; }
+.gantt-head .gantt-track { height: 14px; }
+.gantt-tick { position: absolute; top: 0; white-space: nowrap; }
+.gantt-grid { position: absolute; top: -3px; bottom: -3px; border-left: 1px dashed var(--border); }
+.gantt-bar { position: absolute; top: 3px; height: 12px; border-radius: 3px; overflow: hidden; opacity: 0.85; }
+.gantt-progress { display: block; height: 100%; background: rgba(0, 0, 0, 0.28); }
+.gantt-today { position: absolute; top: -3px; bottom: -3px; border-left: 2px solid #d64550; }
+.gantt-legend { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; color: var(--muted); }
+.gantt-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.gantt-legend i.today { background: #d64550; width: 2px; }
+
+/* ---------- Dica com detalhes ---------- */
+.detail-tip { min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
+.detail-trend { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 4px; }

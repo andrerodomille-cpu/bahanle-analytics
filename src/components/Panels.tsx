@@ -1,13 +1,13 @@
 import { useRef, useState } from "react";
 import type { Dispatch } from "react";
-import type { Column, FieldRef, Measure, MeasureFormat, RefLine, Report, Visual, VisualType } from "../model/types";
+import type { Column, FieldRef, FormatRule, Measure, MeasureFormat, RefLine, Report, Visual, VisualType } from "../model/types";
 import { newId, sameField } from "../model/types";
 import { FieldSelect } from "./FieldSelect";
 import { hierarchyOf } from "../engine/query";
 import type { Action } from "../model/store";
 import { importFile } from "../model/importers";
 import { parse } from "../engine/expr";
-import { Engine } from "../engine/query";
+import { Engine, whatIfParams } from "../engine/query";
 import { formatMeasure, formatValue } from "../model/format";
 import { evaluateColumn } from "../model/calculated";
 import { MEASURE_SLOTS, USES_LEGEND } from "./VisualView";
@@ -42,6 +42,15 @@ export const VISUAL_TYPES: { type: VisualType; label: string; icon: string }[] =
   { type: "image", label: "Imagem", icon: "🖼" },
   { type: "pareto", label: "Pareto", icon: "▇⟍" },
   { type: "narrative", label: "Narrativa", icon: "¶" },
+  { type: "multicard", label: "Cartões", icon: "▤▤" },
+  { type: "funnel", label: "Funil", icon: "⏷" },
+  { type: "fieldparam", label: "Parâmetro", icon: "⇄" },
+  { type: "bullet", label: "Marcador", icon: "▬|" },
+  { type: "radar", label: "Radar", icon: "✶" },
+  { type: "calendar", label: "Calendário", icon: "▦" },
+  { type: "whatif", label: "E se", icon: "⇆" },
+  { type: "sankey", label: "Sankey", icon: "⫘" },
+  { type: "gantt", label: "Gantt", icon: "☰▬" },
 ];
 
 const AXIS_LABEL: Partial<Record<VisualType, string>> = {
@@ -56,6 +65,10 @@ const AXIS_LABEL: Partial<Record<VisualType, string>> = {
   map: "Localização (UF, estado, código IBGE ou região)",
   bubblemap: "Local (uma bolha por valor)",
   narrative: "Eixo de tempo (opcional)",
+  bullet: "Categoria (opcional: um marcador por valor)",
+  calendar: "Data (coluna de data)",
+  sankey: "Origem",
+  gantt: "Tarefa",
   waterfall: "Categoria (cada degrau)",
 };
 
@@ -223,7 +236,11 @@ const HAS_TOPN: VisualType[] = ["bar", "hbar", "line", "area", "pie", "treemap",
 /** Visuais de layout: sem eixo, medidas, ordenação ou filtros de visual. */
 const LAYOUT: VisualType[] = ["text", "button", "image"];
 /** Visuais sem eixo de categoria. */
-const NO_AXIS_FIELD: VisualType[] = ["card", "gauge", "histogram", "influencers", "decomp", ...LAYOUT];
+const NO_AXIS_FIELD: VisualType[] = ["card", "gauge", "histogram", "influencers", "decomp", "fieldparam", "whatif", ...LAYOUT];
+/** Visuais com dica de ferramenta detalhada. */
+const HAS_DETAILS: VisualType[] = ["bar", "hbar", "line", "area", "pie"];
+/** Visuais que aceitam formatação condicional por regras. */
+const HAS_RULES: VisualType[] = ["table", "matrix", "card", "kpi", "multicard"];
 const HAS_REFLINES: VisualType[] = ["bar", "hbar", "line", "area"];
 
 function VisualProperties({ report, visual, dispatch }: {
@@ -318,6 +335,7 @@ function VisualProperties({ report, visual, dispatch }: {
             <option value="list">Lista</option>
             <option value="dropdown">Lista suspensa</option>
             <option value="between">Entre (intervalo de números ou datas)</option>
+            <option value="relative">Data relativa (últimos N dias, este mês…)</option>
           </select>
         </label>
       )}
@@ -359,12 +377,36 @@ function VisualProperties({ report, visual, dispatch }: {
       {!NO_AXIS_FIELD.includes(visual.type) &&
         fieldSelect(AXIS_LABEL[visual.type] ?? "Eixo X / Categoria", visual.axis, (axis) => update({ axis }))}
 
-      {visual.axis && !["slicer", "scatter", "kpi", "boxplot", "map", "bubblemap", "pareto", "narrative"].includes(visual.type) && (
+      {visual.axis && !["slicer", "scatter", "kpi", "boxplot", "map", "bubblemap", "pareto", "narrative", "bullet", "radar",
+        "calendar", "sankey", "gantt"].includes(visual.type) && (
         <DrillLevels report={report} visual={visual} update={update} />
       )}
 
       {USES_LEGEND.includes(visual.type) &&
-        fieldSelect(visual.type === "stacked" ? "Legenda" : "Colunas", visual.legend, (legend) => update({ legend }))}
+        fieldSelect(visual.type === "stacked" ? "Legenda" : visual.type === "sankey" ? "Destino" : "Colunas", visual.legend, (legend) => update({ legend }))}
+
+      {visual.type === "gantt" && (
+        <>
+          <FieldSelect report={report} label="Início (data)" value={visual.startField} onChange={(startField) => update({ startField })} />
+          <FieldSelect report={report} label="Fim (data)" value={visual.endField} onChange={(endField) => update({ endField })} />
+          <FieldSelect report={report} label="% concluído (opcional, 0 a 1)" value={visual.progressField} onChange={(progressField) => update({ progressField })} />
+          <FieldSelect report={report} label="Cor por (opcional)" value={visual.legend} onChange={(legend) => update({ legend })} />
+        </>
+      )}
+
+      {visual.type === "whatif" && <WhatIfEditor report={report} visual={visual} update={update} />}
+
+      {["bar", "line", "area"].includes(visual.type) && (
+        <FieldSelect report={report} label="Pequenos múltiplos por (opcional)" value={visual.multiples}
+          onChange={(multiples) => update({ multiples })} />
+      )}
+
+      {visual.type === "radar" && (
+        <label className="check">
+          <input type="checkbox" checked={visual.normalize ?? visual.measureIds.length > 1} onChange={(e) => update({ normalize: e.target.checked })} />
+          Escalar cada medida pelo próprio máximo (comparar medidas diferentes)
+        </label>
+      )}
 
       {(visual.type === "histogram" || visual.type === "boxplot") && (
         <>
@@ -404,7 +446,18 @@ function VisualProperties({ report, visual, dispatch }: {
         />
       )}
 
-      {!["slicer", "histogram", "boxplot", ...LAYOUT].includes(visual.type) && (
+      {visual.type === "fieldparam" && (
+        <FieldList
+          report={report}
+          label="Campos oferecidos"
+          fields={visual.paramFields ?? []}
+          onChange={(paramFields) => update({ paramFields, paramIndex: 0 })}
+        />
+      )}
+
+      {!NO_AXIS_FIELD.includes(visual.type) && <ParamLink report={report} visual={visual} update={update} />}
+
+      {!["slicer", "histogram", "boxplot", "fieldparam", "whatif", "gantt", ...LAYOUT].includes(visual.type) && (
         <div className="field">
           {single ? "Medida" : "Medidas"}
           {slots && slots.length > 1 && (
@@ -466,9 +519,25 @@ function VisualProperties({ report, visual, dispatch }: {
         </div>
       )}
 
-      {(visual.type === "gauge" || visual.type === "kpi") && (
+      {HAS_RULES.includes(visual.type) && <RulesEditor visual={visual} measures={measures} update={update} />}
+
+      {HAS_DETAILS.includes(visual.type) && <DetailsEditor report={report} visual={visual} update={update} />}
+
+      {visual.type === "bullet" && (
+        <div className="field">
+          Faixas (fração da meta): ruim até / ok até
+          <div className="field-row">
+            <input type="number" step={0.05} min={0} max={1} value={(visual.bands ?? [0.6, 0.9])[0]}
+              onChange={(e) => update({ bands: [Number(e.target.value), (visual.bands ?? [0.6, 0.9])[1]] })} />
+            <input type="number" step={0.05} min={0} max={1.5} value={(visual.bands ?? [0.6, 0.9])[1]}
+              onChange={(e) => update({ bands: [(visual.bands ?? [0.6, 0.9])[0], Number(e.target.value)] })} />
+          </div>
+        </div>
+      )}
+
+      {(visual.type === "gauge" || visual.type === "kpi" || visual.type === "bullet") && (
         <label className="field">
-          Meta{visual.type === "kpi" ? " (opcional)" : ""}
+          Meta{visual.type !== "gauge" ? " fixa (opcional)" : ""}
           <input
             type="number"
             value={visual.target ?? ""}
@@ -571,7 +640,7 @@ export function MeasureEditor({ report, measure, dispatch, onClose }: {
     parse(expression);
     const draft: Measure = { id: measure?.id ?? "draft", name, table, expression, format };
     const others = report.measures.filter((m) => m.id !== measure?.id);
-    const engine = new Engine({ ...report, measures: [...others, draft] });
+    const engine = new Engine({ ...report, measures: [...others, draft], params: whatIfParams(report) });
     status = { ok: true, text: `Total sem filtros: ${formatMeasure(engine.evaluateMeasure(draft, []), format)}` };
   } catch (e) {
     status = { ok: false, text: e instanceof Error ? e.message : String(e) };
@@ -1000,5 +1069,134 @@ function PageSettings({ report, pageId, dispatch }: { report: Report; pageId: st
         ↗ no visual ou o clique direito para abrir esta página filtrada por ele.
       </p>
     </>
+  );
+}
+
+// ---------------- Parâmetro de campo: ligação do eixo ----------------
+
+function ParamLink({ report, visual, update }: { report: Report; visual: Visual; update: (p: Partial<Visual>) => void }) {
+  const params = report.visuals.filter((v) => v.type === "fieldparam" && v.pageId === visual.pageId);
+  if (params.length === 0 && !visual.axisParam) return null;
+  return (
+    <label className="field">
+      Eixo controlado por parâmetro
+      <select value={visual.axisParam ?? ""} onChange={(e) => update({ axisParam: e.target.value || undefined, drill: undefined })}>
+        <option value="">(não — usa o eixo acima)</option>
+        {params.map((pv) => <option key={pv.id} value={pv.id}>{pv.title || "Parâmetro"}</option>)}
+      </select>
+      {visual.axisParam && <span className="small muted">O eixo acima vale só se o parâmetro estiver vazio.</span>}
+    </label>
+  );
+}
+
+// ---------------- Formatação condicional por regras ----------------
+
+const RULE_OPS: { op: FormatRule["op"]; label: string }[] = [
+  { op: ">", label: "maior que" }, { op: ">=", label: "maior ou igual a" }, { op: "<", label: "menor que" },
+  { op: "<=", label: "menor ou igual a" }, { op: "between", label: "entre" },
+];
+
+function RulesEditor({ visual, measures, update }: { visual: Visual; measures: Measure[]; update: (p: Partial<Visual>) => void }) {
+  const rules = visual.rules ?? [];
+  const set = (next: FormatRule[]) => update({ rules: next });
+  const patch = (i: number, p: Partial<FormatRule>) => set(rules.map((r, j) => (j === i ? { ...r, ...p } : r)));
+  return (
+    <div className="field">
+      Regras de cor (a primeira que bater vale)
+      {rules.map((r, i) => (
+        <div key={r.id} className="ref-line">
+          <div className="field-row">
+            <select value={r.measure} onChange={(e) => patch(i, { measure: Number(e.target.value) })}>
+              {measures.map((m, k) => <option key={m.id} value={k}>{m.name}</option>)}
+            </select>
+            <button title="Remover regra" onClick={() => set(rules.filter((_, j) => j !== i))}>✕</button>
+          </div>
+          <div className="field-row">
+            <select value={r.op} onChange={(e) => patch(i, { op: e.target.value as FormatRule["op"] })}>
+              {RULE_OPS.map((o) => <option key={o.op} value={o.op}>{o.label}</option>)}
+            </select>
+            <input type="number" value={r.value} onChange={(e) => patch(i, { value: Number(e.target.value) })} />
+            {r.op === "between" && (
+              <input type="number" value={r.value2 ?? ""} onChange={(e) => patch(i, { value2: Number(e.target.value) })} />
+            )}
+          </div>
+          <div className="field-row">
+            <select value={r.style} onChange={(e) => patch(i, { style: e.target.value as FormatRule["style"] })}>
+              <option value="good">▲ Verde (bom)</option>
+              <option value="warn">● Amarelo (atenção)</option>
+              <option value="bad">▼ Vermelho (ruim)</option>
+            </select>
+            <label className="check">
+              <input type="checkbox" checked={r.icon} onChange={(e) => patch(i, { icon: e.target.checked })} />
+              ícone
+            </label>
+          </div>
+        </div>
+      ))}
+      <button disabled={measures.length === 0}
+        onClick={() => set([...rules, { id: newId(), measure: 0, op: ">=", value: 0, style: "good", icon: true }])}>
+        + Adicionar regra
+      </button>
+      <span className="small muted">Valores de percentual entram como fração: 10% = 0,1.</span>
+    </div>
+  );
+}
+
+// ---------------- Parâmetro "e se" ----------------
+
+function WhatIfEditor({ report, visual, update }: { report: Report; visual: Visual; update: (p: Partial<Visual>) => void }) {
+  const w = visual.whatif ?? { name: "", min: 0, max: 1, step: 0.01, value: 0, format: "percent" as MeasureFormat };
+  const set = (p: Partial<NonNullable<Visual["whatif"]>>) => update({ whatif: { ...w, ...p } });
+  const clash = !!w.name && report.measures.some((m) => m.name === w.name);
+  const dup = !!w.name && report.visuals.some((v) => v.id !== visual.id && v.type === "whatif" && v.whatif?.name === w.name);
+  const num = (k: "min" | "max" | "step" | "value", label: string) => (
+    <label className="field">
+      {label}
+      <input type="number" value={w[k]} step={w.step} onChange={(e) => set({ [k]: Number(e.target.value) })} />
+    </label>
+  );
+  return (
+    <div className="field">
+      <label className="field">
+        Nome do parâmetro (use [Nome] nas medidas)
+        <input value={w.name} onChange={(e) => set({ name: e.target.value })} />
+      </label>
+      {(clash || dup) && <span className="error small">Já existe uma medida ou parâmetro com esse nome.</span>}
+      <div className="field-row">{num("min", "Mínimo")}{num("max", "Máximo")}</div>
+      <div className="field-row">{num("step", "Passo")}{num("value", "Valor atual")}</div>
+      <label className="field">
+        Formato
+        <select value={w.format} onChange={(e) => set({ format: e.target.value as MeasureFormat })}>
+          <option value="percent">Percentual</option>
+          <option value="number">Número</option>
+          <option value="currency">Moeda (R$)</option>
+        </select>
+      </label>
+    </div>
+  );
+}
+
+// ---------------- Dica de ferramenta com detalhes ----------------
+
+function DetailsEditor({ report, visual, update }: { report: Report; visual: Visual; update: (p: Partial<Visual>) => void }) {
+  const chosen = visual.tooltipMeasures ?? [];
+  return (
+    <div className="field">
+      Dica de ferramenta: medidas extras
+      <div className="checklist">
+        {report.measures.filter((m) => !visual.measureIds.includes(m.id)).map((m) => (
+          <label key={m.id}>
+            <input
+              type="checkbox"
+              checked={chosen.includes(m.id)}
+              onChange={() => update({ tooltipMeasures: chosen.includes(m.id) ? chosen.filter((x) => x !== m.id) : [...chosen, m.id] })}
+            />
+            {m.name}
+          </label>
+        ))}
+      </div>
+      <FieldSelect report={report} label="Minigráfico na dica, por (opcional)" value={visual.tooltipTrend}
+        onChange={(tooltipTrend) => update({ tooltipTrend })} />
+    </div>
   );
 }

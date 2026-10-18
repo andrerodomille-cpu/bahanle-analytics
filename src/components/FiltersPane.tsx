@@ -3,7 +3,7 @@ import type { Dispatch } from "react";
 import type { FilterScope, PaneFilter, Report, Value, Visual } from "../model/types";
 import { fieldLabel, newId } from "../model/types";
 import { FieldSelect } from "./FieldSelect";
-import { datePart } from "../model/dates";
+import { datePart, isIsoDate } from "../model/dates";
 import type { Action } from "../model/store";
 import { valueKey } from "../engine/query";
 import { formatValue } from "../model/format";
@@ -75,6 +75,25 @@ function FilterCard({ report, filter, dispatch }: { report: Report; filter: Pane
     return [...seen.values()].sort((a, b) => formatValue(a).localeCompare(formatValue(b), "pt-BR", { numeric: true }));
   }, [table, filter.field.column, filter.field.part]);
 
+  // Filtragem avançada: campos numéricos ou de data também aceitam intervalo.
+  const nonBlank = all.filter((v) => v !== null && v !== "");
+  const isDate = nonBlank.length > 0 && nonBlank.every((v) => isIsoDate(v));
+  const isNumber = nonBlank.length > 0 && nonBlank.every((v) => typeof v === "number");
+  const canRange = isDate || isNumber;
+  const [mode, setMode] = useState<"list" | "range">(filter.range ? "range" : "list");
+  const [lo, setLo] = useState(filter.range?.min ?? "");
+  const [hi, setHi] = useState(filter.range?.max ?? "");
+  const active = filter.values.length > 0 || !!filter.range;
+  const applyRange = () => {
+    const parse = (x: Value | ""): Value | undefined => (x === "" || x === null ? undefined : isNumber ? Number(x) : String(x));
+    const min = parse(lo);
+    const max = parse(hi);
+    dispatch({
+      type: "updatePaneFilter", id: filter.id, values: [],
+      range: min === undefined && max === undefined ? undefined : { min, max },
+    });
+  };
+
   const selected = new Set(filter.values.map(valueKey));
   const term = search.trim().toLowerCase();
   const shown = all.filter((v) => !term || formatValue(v).toLowerCase().includes(term));
@@ -82,20 +101,30 @@ function FilterCard({ report, filter, dispatch }: { report: Report; filter: Pane
   const toggle = (v: Value) =>
     set(selected.has(valueKey(v)) ? filter.values.filter((x) => valueKey(x) !== valueKey(v)) : [...filter.values, v]);
 
-  const summary = filter.values.length === 0
-    ? "é (Todos)"
-    : `é ${filter.values.slice(0, 3).map(formatValue).join(", ")}${filter.values.length > 3 ? ` e mais ${filter.values.length - 3}` : ""}`;
+  const show = (v: Value | undefined) => (typeof v === "number" ? v.toLocaleString("pt-BR") : formatValue(v ?? null));
+  const summary = filter.range
+    ? filter.range.min !== undefined && filter.range.max !== undefined
+      ? `entre ${show(filter.range.min)} e ${show(filter.range.max)}`
+      : filter.range.min !== undefined ? `≥ ${show(filter.range.min)}` : `≤ ${show(filter.range.max)}`
+    : filter.values.length === 0
+      ? "é (Todos)"
+      : `é ${filter.values.slice(0, 3).map(formatValue).join(", ")}${filter.values.length > 3 ? ` e mais ${filter.values.length - 3}` : ""}`;
 
   return (
-    <div className={"filter-card" + (filter.values.length ? " active" : "")}>
+    <div className={"filter-card" + (active ? " active" : "")}>
       <div className="filter-card-head" onClick={() => setOpen(!open)}>
         <div>
           <strong>{fieldLabel(filter.field)}</strong> <span className="muted small">({filter.field.table})</span>
           <div className="small muted">{summary}</div>
         </div>
         <span className="filter-card-tools">
-          {filter.values.length > 0 && (
-            <button className="link" title="Limpar filtro" onClick={(e) => { e.stopPropagation(); set([]); }}>⌫</button>
+          {active && (
+            <button className="link" title="Limpar filtro" onClick={(e) => {
+              e.stopPropagation();
+              setLo("");
+              setHi("");
+              set([]);
+            }}>⌫</button>
           )}
           <button
             className="link"
@@ -113,6 +142,22 @@ function FilterCard({ report, filter, dispatch }: { report: Report; filter: Pane
       {open && (
         <div className="filter-card-body">
           {!table && <div className="error small">Tabela não existe mais.</div>}
+          {canRange && (
+            <div className="filter-mode">
+              <button className={mode === "list" ? "on" : ""} onClick={() => setMode("list")}>Lista</button>
+              <button className={mode === "range" ? "on" : ""} onClick={() => setMode("range")}>Intervalo</button>
+            </div>
+          )}
+          {mode === "range" && canRange ? (
+            <div className="filter-range">
+              <input type={isDate ? "date" : "number"} placeholder="mínimo" value={lo ?? ""}
+                onChange={(e) => setLo(e.target.value)} onBlur={applyRange} onKeyDown={(e) => e.key === "Enter" && applyRange()} />
+              <span className="muted">até</span>
+              <input type={isDate ? "date" : "number"} placeholder="máximo" value={hi ?? ""}
+                onChange={(e) => setHi(e.target.value)} onBlur={applyRange} onKeyDown={(e) => e.key === "Enter" && applyRange()} />
+            </div>
+          ) : (
+          <>
           {all.length > 8 && (
             <input placeholder="Pesquisar" value={search} onChange={(e) => setSearch(e.target.value)} />
           )}
@@ -127,6 +172,8 @@ function FilterCard({ report, filter, dispatch }: { report: Report; filter: Pane
               <span className="muted small">Mostrando {MAX_SHOWN} de {shown.length}; use a pesquisa.</span>
             )}
           </div>
+          </>
+          )}
         </div>
       )}
     </div>

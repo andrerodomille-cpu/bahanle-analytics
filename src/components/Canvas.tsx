@@ -3,7 +3,10 @@ import type { Dispatch } from "react";
 import type { ButtonAction, FieldRef, Measure, Page, Report, Value, ValueRange, Visual } from "../model/types";
 import { fieldLabel, newId } from "../model/types";
 import type { Action } from "../model/store";
-import { Engine, axisOf, contextFor, fillTemplate, hierarchyOf, runGrid, runTotals, runVisual, valueKey } from "../engine/query";
+import {
+  Engine, axisOf, contextFor, fillTemplate, hierarchyOf, runGrid, runTotals, runVisual, valueKey, whatIfParams,
+} from "../engine/query";
+import { detailMeasures, runCalendar, runDetails, runGantt, runMultiples } from "../engine/lab";
 import { distributionValues, generateNarrative, keyInfluencers, runBoxplot, runDecomposition } from "../engine/analytics";
 import type { RangeDomain } from "./Package3Visuals";
 import { isIsoDate } from "../model/dates";
@@ -12,6 +15,7 @@ import type { Analysis } from "./AnalyticsVisuals";
 import { USES_LEGEND, VisualView } from "./VisualView";
 import { downloadText, visualToCsv } from "../model/exportCsv";
 import { formatMeasure, formatValue } from "../model/format";
+import { measure } from "../model/perf";
 
 const GRID = 10;
 const snap = (n: number) => Math.max(0, Math.round(n / GRID) * GRID);
@@ -28,6 +32,10 @@ interface Props {
   onAction: (a: ButtonAction) => void;
   /** Drill-through: abrir a página de detalhe filtrada pelo item. */
   onDrillthrough: (pageId: string, field: FieldRef, value: Value) => void;
+  /** Muda para recriar o motor do zero (caches vazios) — usado pelo analisador de desempenho. */
+  engineEpoch?: number;
+  /** Muda para recalcular reaproveitando os caches. */
+  renderTick?: number;
 }
 
 /**
@@ -49,18 +57,29 @@ const ANALYSIS: Visual["type"][] = ["histogram", "boxplot", "influencers", "deco
 /** Mapas: consulta normal + posição geográfica; sem drill. */
 const MAPS: Visual["type"][] = ["map", "bubblemap"];
 /** Visuais que usam a linha de total (medidas sem o filtro de categoria). */
-const NEEDS_TOTALS: Visual["type"][] = ["table", "kpi", "waterfall"];
+const NEEDS_TOTALS: Visual["type"][] = ["table", "kpi", "waterfall", "bullet"];
 
-export function Canvas({ report, pageId, dispatch, selectedId, onSelectVisual, readOnly, onAction, onDrillthrough }: Props) {
+export function Canvas({
+  report, pageId, dispatch, selectedId, onSelectVisual, readOnly, onAction, onDrillthrough, engineEpoch = 0, renderTick = 0,
+}: Props) {
   // Um motor por versão do modelo: mover visuais ou filtrar reaproveita os caches.
   const { tables, relationships, measures } = report;
-  const engine = useMemo(() => new Engine({ tables, relationships, measures }), [tables, relationships, measures]);
+  // Parâmetros "e se" entram no motor; mudar um deles recria o motor (as medidas mudam).
+  const params = whatIfParams(report);
+  const paramsKey = JSON.stringify(params);
+  const engine = useMemo(
+    () => new Engine({ tables, relationships, measures, params }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tables, relationships, measures, engineEpoch, paramsKey],
+  );
   const [focusId, setFocusId] = useState<string | null>(null);
   const visuals = report.visuals.filter((v) => v.pageId === pageId);
   const focused = visuals.find((v) => v.id === focusId);
   const height = Math.max(700, ...visuals.map((v) => v.y + v.h + 20));
 
-  const body = (v: Visual) => <VisualBody report={report} engine={engine} visual={v} dispatch={dispatch} onAction={onAction} />;
+  const body = (v: Visual) => (
+    <VisualBody key={`${v.id}-${renderTick}`} report={report} engine={engine} visual={v} dispatch={dispatch} onAction={onAction} />
+  );
 
   const actions = (v: Visual): FrameAction[] => {
     const list: FrameAction[] = [...drillActions(report, v, dispatch)];
@@ -147,7 +166,7 @@ export function Canvas({ report, pageId, dispatch, selectedId, onSelectVisual, r
 
 /** Botões de drill do Power BI: subir, ir para o próximo nível e o modo "clique detalha". */
 function drillActions(report: Report, v: Visual, dispatch: Dispatch<Action>): FrameAction[] {
-  if (v.type === "kpi" || DECORATIVE.includes(v.type) || ANALYSIS.includes(v.type) || MAPS.includes(v.type)) return [];
+  if (["kpi", "slicer", "fieldparam", "bullet", "calendar", "gantt", "sankey", "whatif", "radar"].includes(v.type) || DECORATIVE.includes(v.type) || ANALYSIS.includes(v.type) || MAPS.includes(v.type)) return [];
   const levels = hierarchyOf(report, v);
   if (levels.length < 2) return [];
   const level = Math.min(v.drill?.level ?? 0, levels.length - 1);
@@ -198,11 +217,23 @@ function exportVisual(engine: Engine, report: Report, visual: Visual) {
   downloadText(`${name}.csv`, csv);
 }
 
-function VisualBody({ report, engine, visual, dispatch, onAction }: {
+type BodyProps = {
   report: Report; engine: Engine; visual: Visual; dispatch: Dispatch<Action>; onAction: (a: ButtonAction) => void;
-}) {
+};
+
+/** Calcula o visual medindo o tempo e o trabalho do motor (analisador de desempenho). */
+function VisualBody(props: BodyProps) {
+  const { engine, visual } = props;
+  return measure(engine.stats, { visualId: visual.id, title: visual.title, type: visual.type }, () => visualBody(props));
+}
+
+function visualBody({ report, engine, visual, dispatch, onAction }: BodyProps) {
+  const update = (patch: Partial<Visual>) => dispatch({ type: "updateVisual", id: visual.id, patch });
   if (visual.type === "button" || visual.type === "image") {
     return <VisualView {...EMPTY} visual={visual} measures={[]} onAction={onAction} />;
+  }
+  if (visual.type === "fieldparam" || visual.type === "whatif") {
+    return <VisualView {...EMPTY} visual={visual} measures={[]} onAction={onAction} onUpdate={update} />;
   }
   if (visual.type === "narrative") {
     const ms = measuresOf(report, visual);
@@ -227,6 +258,8 @@ function VisualBody({ report, engine, visual, dispatch, onAction }: {
   let analysis: Analysis | undefined;
   let analysisError: string | undefined;
   let geo: React.ComponentProps<typeof VisualView>["geo"];
+  let lab: React.ComponentProps<typeof VisualView>["lab"];
+  let details: React.ComponentProps<typeof VisualView>["details"];
   try {
     if (visual.type === "histogram") analysis = { kind: "histogram", values: distributionValues(engine, report, visual) };
     if (visual.type === "boxplot") analysis = { kind: "boxplot", rows: runBoxplot(engine, report, visual) };
@@ -242,6 +275,17 @@ function VisualBody({ report, engine, visual, dispatch, onAction }: {
     if (visual.type === "bubblemap" && visual.axis && measures[0]) {
       geo = { kind: "bubblemap", result: runBubbles(engine, report, visual, measures) };
     }
+    if (visual.multiples && ["bar", "line", "area"].includes(visual.type) && measures[0]) {
+      lab = { kind: "multiples", result: runMultiples(engine, report, visual) };
+    }
+    if (visual.type === "calendar" && visual.axis && measures[0]) {
+      lab = { kind: "calendar", result: runCalendar(engine, report, visual, measures[0]) };
+    }
+    if (visual.type === "gantt") lab = { kind: "gantt", tasks: runGantt(engine, report, visual) };
+    const axisNow = axisOf(report, visual);
+    if ((visual.tooltipMeasures?.length || visual.tooltipTrend) && axisNow && !result.error) {
+      details = runDetails(engine, report, visual, axisNow, result.rows);
+    }
   } catch (e) {
     analysisError = e instanceof Error ? e.message : String(e);
   }
@@ -249,7 +293,7 @@ function VisualBody({ report, engine, visual, dispatch, onAction }: {
   // Segmentação "entre": mínimo e máximo do campo (coluna inteira, sem hierarquia de datas),
   // com os outros filtros da página — o próprio filtro dela não limita o domínio.
   let rangeDomain: RangeDomain | undefined;
-  if (visual.type === "slicer" && visual.slicerStyle === "between" && visual.axis) {
+  if (visual.type === "slicer" && (visual.slicerStyle === "between" || visual.slicerStyle === "relative") && visual.axis) {
     const vals = engine.distinct(visual.axis, contextFor(report, visual)).filter((x) => x !== null && x !== "");
     const isDate = vals.length > 0 && vals.every((x) => isIsoDate(x));
     const nums = vals.map(Number);
@@ -285,7 +329,8 @@ function VisualBody({ report, engine, visual, dispatch, onAction }: {
       dispatch({ type: "updateVisual", id: visual.id, patch: { drill: { level: level + 1, path } } });
       return;
     }
-    dispatch({ type: "toggleFilter", multi, filter: { field: axis, values: [category], sourceVisualId: visual.id } });
+    const field = visual.type === "calendar" && visual.axis ? visual.axis : axis;
+    dispatch({ type: "toggleFilter", multi, filter: { field, values: [category], sourceVisualId: visual.id } });
   };
 
   return (
@@ -297,10 +342,17 @@ function VisualBody({ report, engine, visual, dispatch, onAction }: {
       measures={measures}
       analysis={analysis}
       geo={geo}
+      lab={lab}
+      details={details}
+      detailExtras={details ? detailMeasures(report, visual) : undefined}
       ownFilter={own}
       onFilterField={filterField}
       rangeDomain={rangeDomain}
       onSetRange={setRange}
+      onSetRelative={(relative, range) => {
+        update({ relative });
+        setRange(range);
+      }}
       selected={selected}
       onSelect={select}
       onSetValues={(values) =>
@@ -325,6 +377,7 @@ const EMPTY = {
   onUpdate: () => {},
   onFilterField: () => {},
   onSetRange: () => {},
+  onSetRelative: () => {},
 };
 
 interface FrameAction {

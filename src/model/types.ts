@@ -105,7 +105,48 @@ export type VisualType =
   | "bubblemap"
   | "image"
   | "pareto"
-  | "narrative";
+  | "narrative"
+  | "multicard"
+  | "funnel"
+  | "fieldparam"
+  | "bullet"
+  | "radar"
+  | "calendar"
+  | "whatif"
+  | "sankey"
+  | "gantt";
+
+/** Parâmetro "e se": um valor ajustável que as medidas leem como [Nome]. */
+export interface WhatIf {
+  name: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  format: MeasureFormat;
+}
+
+/** Filtro de data relativa: "últimos 30 dias", "este ano", "mês passado"… */
+export interface RelativeDate {
+  kind: "last" | "this" | "previous";
+  /** Quantidade (só para "last"). */
+  n?: number;
+  unit: "day" | "month" | "year";
+  /** Referência: a data mais recente dos dados ou o dia de hoje. */
+  anchor: "data" | "today";
+}
+
+/** Regra de formatação condicional: se a medida atender à condição, aplica cor/ícone. */
+export interface FormatRule {
+  id: string;
+  /** Índice da medida no visual. */
+  measure: number;
+  op: ">" | ">=" | "<" | "<=" | "between";
+  value: number;
+  value2?: number;
+  style: "good" | "warn" | "bad";
+  icon: boolean;
+}
 
 export interface ImageSource {
   /** data: URL (imagem enviada, fica dentro do relatório) ou endereço https. */
@@ -220,9 +261,35 @@ export interface Visual {
   textAlign?: "left" | "center" | "right";
   textSize?: "s" | "m" | "l";
   /** Segmentação: lista, lista suspensa ou intervalo ("entre"). */
-  slicerStyle?: "list" | "dropdown" | "between";
+  slicerStyle?: "list" | "dropdown" | "between" | "relative";
   /** Detecção de anomalias em linha/área: sensibilidade em desvios-padrão (2 ou 3). */
   anomalies?: { sensitivity: number };
+  /** Segmentação de data relativa (estilo "relative"). */
+  relative?: RelativeDate;
+  /** Formatação condicional por regras (tabela, matriz, cartões). */
+  rules?: FormatRule[];
+  /** Parâmetro de campo: os campos oferecidos e o escolhido. */
+  paramFields?: FieldRef[];
+  paramIndex?: number;
+  /** Eixo controlado por um parâmetro de campo (id do visual do parâmetro). */
+  axisParam?: string;
+  /** Pequenos múltiplos: repete o gráfico para cada valor deste campo. */
+  multiples?: FieldRef;
+  /** Gráfico de marcador: limites das faixas ruim/ok como fração da meta. */
+  bands?: [number, number];
+  /** Radar: escalar cada medida pelo próprio máximo (para comparar medidas diferentes). */
+  normalize?: boolean;
+  /** Calendário de calor: ano mostrado. */
+  calendarYear?: number;
+  /** Parâmetro "e se". */
+  whatif?: WhatIf;
+  /** Dica de ferramenta com detalhes: medidas extras e minigráfico por este campo. */
+  tooltipMeasures?: string[];
+  tooltipTrend?: FieldRef;
+  /** Gantt: colunas de início, fim e % concluído. */
+  startField?: FieldRef;
+  endField?: FieldRef;
+  progressField?: FieldRef;
 }
 
 export type FilterScope = "visual" | "page" | "report";

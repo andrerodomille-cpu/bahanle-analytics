@@ -1,4 +1,4 @@
-import type { DatePart, Value } from "./types";
+import type { DatePart, RelativeDate, Value } from "./types";
 
 // Datas circulam como texto ISO "AAAA-MM-DD": ordenam certo como texto,
 // cabem no JSON do relatório e não sofrem com fuso horário.
@@ -77,3 +77,42 @@ export function shiftDate(iso: string, n: number, unit: DateUnit): string {
 }
 
 export const formatDateBR = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
+// ---------- Datas relativas ----------
+
+const UNIT: Record<RelativeDate["unit"], DateUnit> = { day: "DAY", month: "MONTH", year: "YEAR" };
+const UNIT_LABEL: Record<RelativeDate["unit"], [string, string]> = {
+  day: ["dia", "dias"], month: ["mês", "meses"], year: ["ano", "anos"],
+};
+
+const startOf = (iso: string, unit: RelativeDate["unit"]) =>
+  unit === "year" ? `${iso.slice(0, 4)}-01-01` : unit === "month" ? `${iso.slice(0, 7)}-01` : iso;
+const endOf = (iso: string, unit: RelativeDate["unit"]) =>
+  unit === "day" ? iso : shiftDate(shiftDate(startOf(iso, unit), 1, UNIT[unit]), -1, "DAY");
+
+/**
+ * Intervalo de uma data relativa a partir da data de referência:
+ * - "últimos N": de N unidades atrás (sem contar a referência) até a referência;
+ * - "este": o período inteiro da referência (mês ou ano corrente);
+ * - "anterior": o período completo anterior ao da referência.
+ */
+export function relativeRange(spec: RelativeDate, anchor: string): { min: string; max: string } {
+  const n = Math.max(1, spec.n ?? 1);
+  if (spec.kind === "last") return { min: shiftDate(shiftDate(anchor, -n, UNIT[spec.unit]), 1, "DAY"), max: anchor };
+  if (spec.kind === "this") return { min: startOf(anchor, spec.unit), max: endOf(anchor, spec.unit) };
+  const prev = shiftDate(startOf(anchor, spec.unit), -1, UNIT[spec.unit]);
+  return { min: startOf(prev, spec.unit), max: endOf(prev, spec.unit) };
+}
+
+export function describeRelative(spec: RelativeDate): string {
+  const [one, many] = UNIT_LABEL[spec.unit];
+  const n = Math.max(1, spec.n ?? 1);
+  if (spec.kind === "last") return n === 1 ? `Último ${one}` : `Últimos ${n} ${many}`;
+  // dia, mês e ano são masculinos: "Este mês", "Ano anterior".
+  return spec.kind === "this" ? `Este ${one}` : `${one[0].toUpperCase()}${one.slice(1)} anterior`;
+}
+
+export const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};

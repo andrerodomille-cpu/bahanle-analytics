@@ -1,5 +1,5 @@
 import type {
-  Bookmark, CrossFilter, DrillthroughState, FieldRef, Measure, Page, PaneFilter, QueryStep, Relationship, Report, ReportTheme, Table, Value, Visual,
+  Bookmark, CrossFilter, DrillthroughState, FieldRef, ValueRange, Measure, Page, PaneFilter, QueryStep, Relationship, Report, ReportTheme, Table, Value, Visual,
 } from "./types";
 import { tableFromQuery } from "./importers";
 import { sampleReport } from "./sampleData";
@@ -23,7 +23,7 @@ export type Action =
   | { type: "setFilter"; sourceVisualId: string; filter: CrossFilter | null }
   | { type: "clearFilters"; pageId: string }
   | { type: "addPaneFilter"; filter: PaneFilter }
-  | { type: "updatePaneFilter"; id: string; values: Value[] }
+  | { type: "updatePaneFilter"; id: string; values: Value[]; range?: ValueRange }
   | { type: "removePaneFilter"; id: string }
   | { type: "addPage"; page: Page }
   | { type: "renamePage"; id: string; name: string }
@@ -89,11 +89,17 @@ export function reducer(state: Report, action: Action): Report {
     case "addVisual":
       return { ...state, visuals: [...state.visuals, action.visual] };
     case "updateVisual": {
-      const visuals = state.visuals.map((v) => (v.id === action.id ? { ...v, ...action.patch } : v));
+      // Trocar o campo de um parâmetro muda o eixo dos visuais ligados a ele:
+      // os filtros cruzados e o drill deles deixam de fazer sentido.
+      const paramChanged = "paramIndex" in action.patch || "paramFields" in action.patch;
+      const linked = new Set(paramChanged ? state.visuals.filter((v) => v.axisParam === action.id).map((v) => v.id) : []);
+      const visuals = state.visuals.map((v) =>
+        v.id === action.id ? { ...v, ...action.patch } : linked.has(v.id) ? { ...v, drill: undefined } : v);
       // Mudou o eixo (ou o nível de drill): o filtro que esse visual criou deixa de fazer sentido.
-      const filters = "axis" in action.patch || "drill" in action.patch || "drillFields" in action.patch
-        ? state.filters.filter((f) => f.sourceVisualId !== action.id)
-        : state.filters;
+      const axisChanged = "axis" in action.patch || "drill" in action.patch || "drillFields" in action.patch ||
+        "axisParam" in action.patch;
+      const filters = state.filters.filter((f) =>
+        !(axisChanged && f.sourceVisualId === action.id) && !linked.has(f.sourceVisualId));
       return { ...state, visuals, filters };
     }
     case "removeVisual":
@@ -129,7 +135,7 @@ export function reducer(state: Report, action: Action): Report {
     case "updatePaneFilter":
       return {
         ...state,
-        paneFilters: state.paneFilters.map((f) => (f.id === action.id ? { ...f, values: action.values } : f)),
+        paneFilters: state.paneFilters.map((f) => (f.id === action.id ? { ...f, values: action.values, range: action.range } : f)),
       };
     case "removePaneFilter":
       return { ...state, paneFilters: state.paneFilters.filter((f) => f.id !== action.id) };

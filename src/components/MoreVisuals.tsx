@@ -20,6 +20,7 @@ import { usePalette } from "../model/theme";
 import type { GridResult, ResultRow } from "../engine/query";
 import { valueKey } from "../engine/query";
 import { formatMeasure, formatValue } from "../model/format";
+import { RuledValue } from "./Package4Visuals";
 
 // Visuais do "pacote executivo": KPI, combo, cascata, mapa de calor,
 // caixa de texto e botão. As consultas são as mesmas dos outros visuais
@@ -80,7 +81,9 @@ export function KpiVisual({ visual, result, totals, measures }: {
   return (
     <div className="kpi-visual">
       {visual.title.toLowerCase() !== m.name.toLowerCase() && <div className="kpi-label">{m.name}</div>}
-      <div className="kpi-value">{formatMeasure(value, m.format)}</div>
+      <div className="kpi-value">
+        <RuledValue rules={visual.rules} measure={0} value={value} text={formatMeasure(value, m.format)} />
+      </div>
       {cmp && (
         <div className="kpi-delta" style={{ color: delta === null ? undefined : delta >= 0 ? GOOD : BAD }}>
           {delta === null ? "—" : `${delta >= 0 ? "▲" : "▼"} ${formatMeasure(Math.abs(delta), "percent")}`}

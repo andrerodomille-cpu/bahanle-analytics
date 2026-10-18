@@ -83,8 +83,14 @@ export class Engine {
   private pathCache = new Map<string, Relationship[] | null>();
   private indexCache = new Map<string, Map<string, Row>>();
   private rowsCache = new Map<string, Row[]>();
+  private groupCache = new Map<string, Map<string, Row[]>>();
+  /** Contadores para o analisador de desempenho. */
+  stats = { rowsScanned: 0, cacheHits: 0, cacheMisses: 0, measureEvals: 0 };
 
-  constructor(private model: Pick<Report, "tables" | "relationships" | "measures">) {
+  constructor(private model: Pick<Report, "tables" | "relationships" | "measures"> & {
+    /** Parâmetros "e se": [Nome] numa medida vale o valor atual do controle. */
+    params?: Record<string, number>;
+  }) {
     for (const t of model.tables) this.tables.set(t.name, t);
     for (const m of model.measures) this.measuresByName.set(m.name, m);
   }
@@ -157,20 +163,57 @@ export class Engine {
   rows(tableName: string, filters: ContextFilter[]): Row[] {
     const sig = tableName + "|" + filters.map(filterSig).join("|");
     const cached = this.rowsCache.get(sig);
-    if (cached) return cached;
+    if (cached) {
+      this.stats.cacheHits++;
+      return cached;
+    }
+    this.stats.cacheMisses++;
     let result: Row[];
     if (filters.length === 0) {
       result = this.table(tableName).rows;
     } else {
-      const base = this.rows(tableName, filters.slice(0, -1));
+      const prefix = filters.slice(0, -1);
+      const base = this.rows(tableName, prefix);
       const f = filters[filters.length - 1];
-      result = this.path(tableName, f.field.table)
-        ? base.filter((r) => passes(f, this.resolve(tableName, r, f.field) ?? null))
-        : base;
+      if (!this.path(tableName, f.field.table)) {
+        result = base;
+      } else if (f.keys) {
+        // Filtro por lista: agrupa as linhas do prefixo pelo valor do campo uma
+        // única vez; cada categoria vira uma consulta ao grupo, sem nova varredura.
+        const groups = this.groups(tableName, prefix, base, f.field);
+        result = f.keys.size === 1
+          ? groups.get([...f.keys][0]) ?? []
+          : [...f.keys].flatMap((k) => groups.get(k) ?? []);
+      } else {
+        this.stats.rowsScanned += base.length;
+        result = base.filter((r) => passes(f, this.resolve(tableName, r, f.field) ?? null));
+      }
     }
-    if (this.rowsCache.size > 20000) this.rowsCache.clear(); // limite simples de memória
+    if (this.rowsCache.size > 20000) {
+      // limite simples de memória
+      this.rowsCache.clear();
+      this.groupCache.clear();
+    }
     this.rowsCache.set(sig, result);
     return result;
+  }
+
+  /** Linhas de `base` agrupadas pelo valor resolvido de `field` (calculado uma vez por prefixo e campo). */
+  private groups(tableName: string, prefix: ContextFilter[], base: Row[], field: FieldRef): Map<string, Row[]> {
+    const key = `${tableName}|${prefix.map(filterSig).join("|")}#${field.table}[${field.column}]${field.part ?? ""}`;
+    let g = this.groupCache.get(key);
+    if (!g) {
+      g = new Map();
+      this.stats.rowsScanned += base.length;
+      for (const r of base) {
+        const k = valueKey(this.resolve(tableName, r, field) ?? null);
+        const list = g.get(k);
+        if (list) list.push(r);
+        else g.set(k, [r]);
+      }
+      this.groupCache.set(key, g);
+    }
+    return g;
   }
 
   // ---------- Medidas e expressões ----------
@@ -186,6 +229,7 @@ export class Engine {
 
   /** Medidas sempre devolvem número (ou BLANK); verdadeiro/falso vira 1/0. */
   evaluateMeasure(measure: Measure, filters: ContextFilter[], stack: string[] = []): number | null {
+    this.stats.measureEvals++;
     if (stack.includes(measure.name)) {
       throw new Error(`Referência circular: ${[...stack, measure.name].join(" → ")}`);
     }
@@ -242,6 +286,8 @@ export class Engine {
         if (row && this.table(row.table).columns.some((c) => c.name === ast.name)) {
           return row.row[ast.name] ?? null;
         }
+        const param = this.model.params?.[ast.name];
+        if (param !== undefined) return param;
         const m = this.measuresByName.get(ast.name);
         if (!m) throw new Error(`Medida não encontrada: [${ast.name}]`);
         return this.evaluateMeasure(m, filters, stack);
@@ -512,11 +558,24 @@ const DATE_LEVELS: DatePart[] = ["year", "quarter", "month", "day"];
  * outros campos usam o eixo seguido dos níveis extras configurados.
  */
 export function hierarchyOf(report: Report, visual: Visual): FieldRef[] {
-  const axis = visual.axis;
+  const axis = baseAxis(report, visual);
   if (!axis) return [];
   const column = report.tables.find((t) => t.name === axis.table)?.columns.find((c) => c.name === axis.column);
   if (column?.type === "date" && !axis.part) return DATE_LEVELS.map((part) => ({ ...axis, part }));
   return [axis, ...(visual.drillFields ?? [])];
+}
+
+/**
+ * Eixo configurado do visual. Se ele está ligado a um parâmetro de campo,
+ * vale o campo escolhido no parâmetro ("ver por Região / Loja / Produto").
+ */
+export function baseAxis(report: Report, visual: Visual): FieldRef | undefined {
+  if (visual.axisParam) {
+    const param = report.visuals.find((v) => v.id === visual.axisParam && v.type === "fieldparam");
+    const fields = param?.paramFields ?? [];
+    if (fields.length) return fields[Math.min(param!.paramIndex ?? 0, fields.length - 1)];
+  }
+  return visual.axis;
 }
 
 const drillLevel = (report: Report, visual: Visual) =>
@@ -682,4 +741,11 @@ export function fillTemplate(
       return "(erro)";
     }
   });
+}
+
+/** Valores atuais dos parâmetros "e se" do relatório, por nome. */
+export function whatIfParams(report: Pick<Report, "visuals">): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const v of report.visuals) if (v.type === "whatif" && v.whatif?.name) out[v.whatif.name] = v.whatif.value;
+  return out;
 }
