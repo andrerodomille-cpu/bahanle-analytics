@@ -1,17 +1,31 @@
 import { useState } from "react";
 import type { Dispatch } from "react";
-import type { FieldRef, Report } from "../model/types";
+import type { Column, ColumnType, FieldRef, FilterOp, QueryStep, Report, Table } from "../model/types";
 import { fieldKey, newId } from "../model/types";
 import type { Action } from "../model/store";
 import { formatValue } from "../model/format";
 import { valueKey } from "../engine/query";
+import { applySteps, describeStep } from "../model/transform";
 
 const PAGE = 200;
+const TYPE_ICON: Record<ColumnType, string> = { number: "#", text: "Aa", date: "📅" };
 
-export function DataView({ report, dispatch }: { report: Report; dispatch: Dispatch<Action> }) {
+export function DataView({ report, dispatch, onEditColumn }: {
+  report: Report;
+  dispatch: Dispatch<Action>;
+  onEditColumn: (table: string, column: Column | null) => void;
+}) {
   const [name, setName] = useState(report.tables[0]?.name ?? "");
+  const [menu, setMenu] = useState<string | null>(null);
   const table = report.tables.find((t) => t.name === name) ?? report.tables[0];
-  if (!table) return <div className="view-empty">Nenhuma tabela. Importe um CSV.</div>;
+  if (!table) return <div className="view-empty">Nenhuma tabela. Use "Obter dados" para importar CSV, Excel ou JSON.</div>;
+
+  const steps = table.query?.steps ?? [];
+  const setSteps = (next: QueryStep[]) => dispatch({ type: "setSteps", table: table.name, steps: next });
+  const addStep = (step: QueryStep) => {
+    setSteps([...steps, step]);
+    setMenu(null);
+  };
 
   return (
     <div className="data-view">
@@ -22,6 +36,11 @@ export function DataView({ report, dispatch }: { report: Report; dispatch: Dispa
           </button>
         ))}
         <span style={{ flex: 1 }} />
+        <button onClick={() => addStep({ kind: "dedupe" })} title="Etapa: remover linhas repetidas">Remover duplicadas</button>
+        <button onClick={() => addStep({ kind: "removeBlank" })} title="Etapa: remover linhas totalmente vazias">
+          Remover linhas em branco
+        </button>
+        <button onClick={() => onEditColumn(table.name, null)}>ƒx Nova coluna</button>
         <span className="muted small">
           {table.rows.length.toLocaleString("pt-BR")} linhas
           {table.rows.length > PAGE && ` (mostrando ${PAGE})`}
@@ -38,28 +57,139 @@ export function DataView({ report, dispatch }: { report: Report; dispatch: Dispa
           Remover tabela
         </button>
       </div>
-      <div className="grid-scroll">
-        <table className="grid">
-          <thead>
-            <tr>
-              {table.columns.map((c) => (
-                <th key={c.name} className={c.type === "number" ? "num" : ""}>
-                  <span className="muted">{c.type === "number" ? "#" : "Aa"}</span> {c.name}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.slice(0, PAGE).map((r, i) => (
-              <tr key={i}>
+      <div className="data-body">
+        <div className="grid-scroll">
+          <table className="grid">
+            <thead>
+              <tr>
                 {table.columns.map((c) => (
-                  <td key={c.name} className={c.type === "number" ? "num" : ""}>{formatValue(r[c.name])}</td>
+                  <th
+                    key={c.name}
+                    className={(c.type === "number" ? "num" : "") + (c.expression ? " calculated" : " transformable")}
+                    title={c.expression
+                      ? `${c.expression}${c.error ? `\nErro: ${c.error}` : ""}\n(clique para editar)`
+                      : "Clique para transformar esta coluna"}
+                    onClick={() => (c.expression ? onEditColumn(table.name, c) : setMenu(menu === c.name ? null : c.name))}
+                  >
+                    <span className="muted">{c.expression ? "ƒx" : TYPE_ICON[c.type]}</span> {c.name}
+                    {c.error && <span className="error"> ⚠</span>}
+                    {menu === c.name && (
+                      <ColumnMenu table={table} column={c} onStep={addStep} onClose={() => setMenu(null)} />
+                    )}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {table.rows.slice(0, PAGE).map((r, i) => (
+                <tr key={i}>
+                  {table.columns.map((c) => (
+                    <td key={c.name} className={c.type === "number" ? "num" : ""}>{formatValue(r[c.name] ?? null)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <AppliedSteps table={table} onChange={setSteps} />
       </div>
+    </div>
+  );
+}
+
+/** "Etapas aplicadas" do Power Query: a receita que transforma a fonte na tabela final. */
+function AppliedSteps({ table, onChange }: { table: Table; onChange: (steps: QueryStep[]) => void }) {
+  const steps = table.query?.steps ?? [];
+  const errors = table.query ? applySteps(table.query).errors : [];
+  return (
+    <aside className="steps">
+      <h3>Consulta</h3>
+      <div className="small muted">Fonte: {table.query?.origin ?? "dados do modelo"}</div>
+      <h3>Etapas aplicadas</h3>
+      <ol>
+        <li className="step source">Fonte</li>
+        {steps.map((s, i) => (
+          <li key={i} className={"step" + (errors[i] ? " has-error" : "")} title={errors[i] ?? ""}>
+            <span>{errors[i] ? "⚠ " : ""}{describeStep(s)}</span>
+            <button className="link" title="Excluir etapa" onClick={() => onChange(steps.filter((_, j) => j !== i))}>✕</button>
+          </li>
+        ))}
+      </ol>
+      {steps.length === 0 && (
+        <p className="small muted">Clique no cabeçalho de uma coluna para renomear, mudar o tipo, filtrar ou substituir valores.</p>
+      )}
+      {steps.length > 0 && (
+        <p className="small muted">
+          Excluir uma etapa reaplica as outras sobre a fonte; etapas que dependem de uma coluna que deixou de existir
+          ficam marcadas com ⚠ e são puladas.
+        </p>
+      )}
+    </aside>
+  );
+}
+
+const OPS: FilterOp[] = ["=", "<>", ">", ">=", "<", "<=", "contém", "não está em branco"];
+
+function ColumnMenu({ table, column, onStep, onClose }: {
+  table: Table;
+  column: Column;
+  onStep: (step: QueryStep) => void;
+  onClose: () => void;
+}) {
+  const [rename, setRename] = useState(column.name);
+  const [op, setOp] = useState<FilterOp>("=");
+  const [value, setValue] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const clash = rename !== column.name && table.columns.some((c) => c.name === rename);
+
+  return (
+    <div className="column-menu" onClick={(e) => e.stopPropagation()}>
+      <div className="column-menu-head">
+        <strong>{column.name}</strong>
+        <button className="link" onClick={onClose}>✕</button>
+      </div>
+      <label className="field">
+        Renomear
+        <div className="field-row">
+          <input value={rename} onChange={(e) => setRename(e.target.value)} />
+          <button
+            disabled={!rename.trim() || rename === column.name || clash}
+            onClick={() => onStep({ kind: "rename", column: column.name, to: rename.trim() })}
+          >
+            OK
+          </button>
+        </div>
+      </label>
+      <label className="field">
+        Tipo
+        <select value={column.type} onChange={(e) => onStep({ kind: "type", column: column.name, to: e.target.value as ColumnType })}>
+          <option value="text">Texto</option>
+          <option value="number">Número</option>
+          <option value="date">Data</option>
+        </select>
+      </label>
+      <div className="field">
+        Manter linhas em que a coluna…
+        <div className="field-row">
+          <select value={op} onChange={(e) => setOp(e.target.value as FilterOp)}>
+            {OPS.map((o) => <option key={o}>{o}</option>)}
+          </select>
+          {op !== "não está em branco" && (
+            <input value={value} placeholder={column.type === "date" ? "dd/mm/aaaa" : "valor"} onChange={(e) => setValue(e.target.value)} />
+          )}
+          <button onClick={() => onStep({ kind: "filter", column: column.name, op, value })}>Filtrar</button>
+        </div>
+      </div>
+      <div className="field">
+        Substituir valores
+        <div className="field-row">
+          <input value={from} placeholder="de" onChange={(e) => setFrom(e.target.value)} />
+          <input value={to} placeholder="para (vazio = em branco)" onChange={(e) => setTo(e.target.value)} />
+          <button onClick={() => onStep({ kind: "replace", column: column.name, from, to })}>OK</button>
+        </div>
+      </div>
+      <button className="danger" onClick={() => onStep({ kind: "remove", columns: [column.name] })}>Remover coluna</button>
     </div>
   );
 }

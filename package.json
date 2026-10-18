@@ -4,15 +4,19 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "npm run build:viewer",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build:viewer": "vite build --mode viewer",
+    "build": "tsc --noEmit && npm run build:viewer && vite build",
     "preview": "vite preview",
     "test": "vitest run"
   },
   "dependencies": {
+    "html-to-image": "^1.11.13",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "read-excel-file": "^9.3.12",
     "recharts": "^2.15.0"
   },
   "devDependencies": {
@@ -22,6 +26,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.6.3",
     "vite": "^6.0.0",
+    "vite-plugin-singlefile": "^2.3.4",
     "vitest": "^2.1.8"
   }
 }

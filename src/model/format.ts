@@ -1,4 +1,5 @@
 import type { MeasureFormat, Value } from "./types";
+import { formatDateBR, isIsoDate } from "./dates";
 
 const number = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
@@ -12,4 +13,5 @@ export function formatMeasure(v: number | null, fmt: MeasureFormat, short = fals
   return fmt === "currency" ? currency.format(v) : number.format(v);
 }
 
-export const formatValue = (v: Value) => (v === null || v === "" ? "(em branco)" : String(v));
+export const formatValue = (v: Value) =>
+  v === null || v === "" ? "(em branco)" : isIsoDate(v) ? formatDateBR(v) : String(v);
