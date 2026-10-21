@@ -1,8 +1,10 @@
-// Quem pode entrar: administradores do .env (ADMIN_EMAILS) e os usuários
-// cadastrados no banco. Um e-mail desconhecido que entra com o Google vira um
-// pedido de acesso, que um administrador aprova (ou recusa) na tela Usuários.
+// Quem pode entrar: qualquer conta Google. No primeiro login a pessoa é
+// cadastrada na hora, ativa, com o papel "free". Administradores vêm do .env
+// (ADMIN_EMAILS) ou da tela Usuários, onde também se bloqueia alguém e se
+// troca o papel (admin, user ou free).
 //
-// Sem banco, vale só o .env: ADMIN_EMAILS e ALLOWED_EMAILS.
+// Sem banco, vale o mesmo, mas nada fica guardado: ADMIN_EMAILS são
+// administradores, ALLOWED_EMAILS são "user" e o resto entra como "free".
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthConfig, AuthedRequest } from "./auth.ts";
@@ -10,8 +12,13 @@ import { isAllowed } from "./auth.ts";
 import { withSchema, type Pool } from "./db.ts";
 import { HttpError, json, readJson, type Next } from "./http.ts";
 
-export type Role = "admin" | "user";
+/** "free" é o papel de quem se cadastra sozinho; "user" e "admin" são dados por um administrador. */
+export type Role = "admin" | "user" | "free";
+/** "pending" só existe em cadastros antigos (antes do cadastro aberto); a migração os ativa. */
 export type UserStatus = "active" | "pending" | "blocked";
+
+export const ROLES: Role[] = ["admin", "user", "free"];
+export const DEFAULT_ROLE: Role = "free";
 
 export interface Profile {
   email: string;
@@ -21,7 +28,7 @@ export interface Profile {
 
 export type LoginResult =
   | { ok: true; role: Role }
-  /** pending: pedido de acesso aguardando aprovação (não é erro). */
+  /** pending: aviso que não é erro (mantido para o site, que mostra em amarelo). */
   | { ok: false; reason: string; pending?: boolean };
 
 /** Regras de acesso usadas pelo login. */
@@ -33,35 +40,46 @@ export interface AccessPolicy {
 }
 
 const lower = (e: string) => e.trim().toLowerCase();
-const deniedMsg = (email: string) => `${email} não tem acesso ao Bahanle Analytics.`;
+const BLOCKED = "Seu acesso ao Bahanle Analytics foi bloqueado.";
 
-/** Só o .env (sem banco): ADMIN_EMAILS são administradores; ALLOWED_EMAILS, usuários. */
+/** Papel de quem não está no banco: admin do .env, "user" por ALLOWED_EMAILS ou "free". */
+const envRole = (email: string, c: AuthConfig): Role =>
+  c.admins.includes(lower(email)) ? "admin" : isAllowed(email, c.allowed) ? "user" : DEFAULT_ROLE;
+
+/** Só o .env (sem banco): todo mundo entra; nada fica guardado. */
 export function envPolicy(c: AuthConfig): AccessPolicy {
-  const roleOf = (email: string): Role | null =>
-    c.admins.includes(lower(email)) ? "admin" : isAllowed(email, c.allowed) ? "user" : null;
   return {
     async login(p) {
-      const role = roleOf(p.email);
-      return role ? { ok: true, role } : { ok: false, reason: deniedMsg(p.email) };
+      return { ok: true, role: envRole(p.email, c) };
     },
     async check(email) {
-      return roleOf(email);
+      return envRole(email, c);
     },
   };
 }
 
 // ---------------- Banco ----------------
 
+/**
+ * Tabela e migrações (idempotentes, rodam na primeira consulta): o papel
+ * "free" entra na lista permitida e vira o padrão, o padrão da situação passa
+ * a ser "active" e os pedidos antigos ainda pendentes são ativados como "free".
+ */
 export const USERS_SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   email         text        PRIMARY KEY,
   name          text        NOT NULL DEFAULT '',
   picture       text,
-  role          text        NOT NULL DEFAULT 'user'    CHECK (role IN ('admin', 'user')),
-  status        text        NOT NULL DEFAULT 'pending' CHECK (status IN ('active', 'pending', 'blocked')),
+  role          text        NOT NULL DEFAULT 'free'   CHECK (role IN ('admin', 'user', 'free')),
+  status        text        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'blocked')),
   created_at    timestamptz NOT NULL DEFAULT now(),
   last_login_at timestamptz
 );
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'user', 'free'));
+ALTER TABLE users ALTER COLUMN role SET DEFAULT 'free';
+ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';
+UPDATE users SET status = 'active', role = 'free' WHERE status = 'pending';
 `;
 
 export interface UserRow {
@@ -86,7 +104,7 @@ export interface UserInfo {
   fromEnv: boolean;
 }
 
-/** Quanto tempo o papel de um e-mail fica em memória (o bloqueio vale no máximo depois disso). */
+/** Quanto tempo o papel de um e-mail fica em memória (mudanças pela tela limpam na hora). */
 const CACHE_MS = 30_000;
 
 export function dbPolicy(pool: Pool, c: AuthConfig) {
@@ -96,11 +114,11 @@ export function dbPolicy(pool: Pool, c: AuthConfig) {
   const get = async (email: string) =>
     (await q<UserRow>("SELECT * FROM users WHERE email = $1", [email])).rows[0] as UserRow | undefined;
 
-  /** Papel conforme .env e banco: o banco manda (um bloqueio vale mesmo para quem está em ALLOWED_EMAILS). */
+  /** Papel atual: admin do .env manda; no banco, bloqueado não entra; sem registro, o do .env (ou "free"). */
   const resolve = (email: string, row: UserRow | undefined): Role | null => {
     if (c.admins.includes(email)) return "admin";
-    if (row) return row.status === "active" ? row.role : null;
-    return isAllowed(email, c.allowed) ? "user" : null;
+    if (row) return row.status === "blocked" ? null : row.role;
+    return envRole(email, c);
   };
 
   const policy: AccessPolicy & { forget(email: string): void; q: typeof q } = {
@@ -110,26 +128,18 @@ export function dbPolicy(pool: Pool, c: AuthConfig) {
     async login(p) {
       const email = lower(p.email);
       const row = await get(email);
-      const role = resolve(email, row);
       cache.delete(email);
-      if (role) {
-        // Guarda nome, foto e último acesso (e cria o registro de quem veio pelo .env).
-        await q(
-          `INSERT INTO users (email, name, picture, role, status, last_login_at) VALUES ($1, $2, $3, $4, 'active', now())
-           ON CONFLICT (email) DO UPDATE SET name = $2, picture = $3, last_login_at = now(),
-             role = CASE WHEN $5 THEN 'admin' ELSE users.role END`,
-          [email, p.name, p.picture ?? null, role, c.admins.includes(email)],
-        );
-        return { ok: true, role };
-      }
-      if (row?.status === "blocked") return { ok: false, reason: "Seu acesso ao Bahanle Analytics foi bloqueado." };
-      if (!row) {
-        await q("INSERT INTO users (email, name, picture, status) VALUES ($1, $2, $3, 'pending') ON CONFLICT DO NOTHING",
-          [email, p.name, p.picture ?? null]);
-      } else {
-        await q("UPDATE users SET name = $2, picture = $3 WHERE email = $1", [email, p.name, p.picture ?? null]);
-      }
-      return { ok: false, pending: true, reason: "Pedido de acesso enviado. Assim que um administrador aprovar, é só entrar de novo." };
+      const role = resolve(email, row);
+      if (!role) return { ok: false, reason: BLOCKED };
+      // Primeiro login: cadastra, ativo, com o papel resolvido ("free" para quem chega sozinho).
+      // Depois: só atualiza nome, foto e último acesso (o papel é o que está no banco).
+      await q(
+        `INSERT INTO users (email, name, picture, role, status, last_login_at) VALUES ($1, $2, $3, $4, 'active', now())
+         ON CONFLICT (email) DO UPDATE SET name = $2, picture = $3, last_login_at = now(),
+           role = CASE WHEN $5 THEN 'admin' ELSE users.role END`,
+        [email, p.name, p.picture ?? null, role, c.admins.includes(email)],
+      );
+      return { ok: true, role };
     },
 
     async check(email) {
@@ -153,6 +163,7 @@ export function dbPolicy(pool: Pool, c: AuthConfig) {
 // ---------------- Rotas de administração ----------------
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const asRole = (v: unknown): Role | undefined => (ROLES.includes(v as Role) ? (v as Role) : undefined);
 
 const info = (r: UserRow, c: AuthConfig): UserInfo => ({
   email: r.email,
@@ -166,7 +177,7 @@ const info = (r: UserRow, c: AuthConfig): UserInfo => ({
 });
 
 /**
- * /api/admin/users          GET lista · POST convida {email, role}
+ * /api/admin/users          GET lista · POST cadastra {email, role} (padrão "free")
  * /api/admin/users/:email   PATCH {role?, status?} · DELETE remove
  * Só administradores. Ninguém muda o próprio acesso nem os administradores do .env.
  */
@@ -186,9 +197,7 @@ export function usersApi(policy: ReturnType<typeof dbPolicy> | null, c: AuthConf
 
       if (target === undefined) {
         if (req.method === "GET") {
-          const rows = (await q<UserRow>(
-            `SELECT * FROM users ORDER BY (status = 'pending') DESC, last_login_at DESC NULLS LAST, email`,
-          )).rows;
+          const rows = (await q<UserRow>(`SELECT * FROM users ORDER BY last_login_at DESC NULLS LAST, email`)).rows;
           const list = rows.map((r) => info(r, c));
           // Administradores do .env que ainda não entraram aparecem também.
           for (const email of c.admins) {
@@ -200,8 +209,9 @@ export function usersApi(policy: ReturnType<typeof dbPolicy> | null, c: AuthConf
           const body = await readJson<{ email?: unknown; role?: unknown }>(req);
           const email = lower(String(body.email ?? ""));
           if (!EMAIL.test(email)) throw new HttpError(400, "E-mail inválido.");
-          const role: Role = body.role === "admin" ? "admin" : "user";
-          // Convidar quem pediu acesso (ou foi bloqueado) libera e ajusta o papel.
+          const role = body.role === undefined ? DEFAULT_ROLE : asRole(body.role);
+          if (!role) throw new HttpError(400, "Papel inválido.");
+          // Cadastrar alguém que já existe (ou estava bloqueado) libera e ajusta o papel.
           const r = await q<UserRow>(
             `INSERT INTO users (email, role, status) VALUES ($1, $2, 'active')
              ON CONFLICT (email) DO UPDATE SET role = $2, status = 'active' RETURNING *`,
@@ -219,7 +229,7 @@ export function usersApi(policy: ReturnType<typeof dbPolicy> | null, c: AuthConf
 
       if (req.method === "PATCH") {
         const body = await readJson<{ role?: unknown; status?: unknown }>(req);
-        const role = body.role === undefined ? null : body.role === "admin" || body.role === "user" ? body.role : undefined;
+        const role = body.role === undefined ? null : asRole(body.role);
         const status = body.status === undefined ? null : body.status === "active" || body.status === "blocked" ? body.status : undefined;
         if (role === undefined || status === undefined) throw new HttpError(400, "Papel ou situação inválidos.");
         const r = await q<UserRow>(

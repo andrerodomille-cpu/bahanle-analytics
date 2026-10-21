@@ -998,3 +998,13 @@ button.big { padding: 10px 18px; font-size: 15px; font-weight: 600; border-radiu
 .thumb.v2 .thumb-bar.alt { fill: color-mix(in srgb, var(--brand-red) 45%, var(--surface)); }
 .thumb.v0 .thumb-line { stroke: var(--brand-red); }
 .thumb.v2 .thumb-line { stroke: var(--brand-yellow); }
+
+/* Usuários: contagem por papel e etiqueta do papel. */
+.users-counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 12px; font-size: 13px; }
+.users-counts span { padding: 4px 10px; border-radius: 999px; background: var(--hover); }
+.users-counts b { margin-right: 3px; }
+.role-tag { font-weight: 600; }
+.role-tag.free { color: var(--brand-yellow-ink); }
+.role-tag.user { color: var(--text); }
+.role-tag.admin { color: var(--brand-red); }
+.users-search { margin: 4px 0 10px; }

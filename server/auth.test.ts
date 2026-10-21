@@ -14,7 +14,7 @@ const config = configFromEnv({
 describe("configuração e lista de permitidos", () => {
   it("lê o .env e aponta o que falta", () => {
     expect(configProblems(config)).toEqual([]);
-    expect(configProblems(configFromEnv({}))).toHaveLength(3);
+    expect(configProblems(configFromEnv({}))).toHaveLength(2); // Client ID e segredo; ADMIN_EMAILS é opcional
     expect(configProblems(configFromEnv({ GOOGLE_CLIENT_ID: "x", ADMIN_EMAILS: "a@b.com", SESSION_SECRET: "x".repeat(40) }))).toEqual([]);
   });
 
@@ -87,12 +87,21 @@ describe("middleware", () => {
     expect(out.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
-  it("sessão válida cai quando a política tira o acesso (e-mail saiu da lista)", async () => {
+  it("o papel é conferido a cada pedido (sai de ALLOWED_EMAILS: vira free)", async () => {
     const session = `minibi_session=${createSession({ email: "ana@gmail.com", name: "Ana" }, config)}`;
     let url = await start(google({}));
     expect(await (await fetch(url + "/api/auth/me", { headers: { cookie: session } })).json()).toMatchObject({ role: "user" });
     server!.close();
     url = await start(google({}), { ...config, allowed: ["@empresa.com"] });
+    expect(await (await fetch(url + "/api/auth/me", { headers: { cookie: session } })).json()).toMatchObject({ role: "free" });
+  });
+
+  it("sessão cai quando a política tira o acesso (bloqueio)", async () => {
+    const session = `minibi_session=${createSession({ email: "ana@gmail.com", name: "Ana" }, config)}`;
+    const blocked = authMiddleware(config, { login: async () => ({ ok: false, reason: "bloqueado" }), check: async () => null }, google({}));
+    server = createServer((req, res) => void blocked(req, res, () => res.end("APP")));
+    await new Promise<void>((r) => server!.listen(0, r));
+    const url = `http://127.0.0.1:${(server!.address() as AddressInfo).port}`;
     expect((await fetch(url + "/api/auth/me", { headers: { cookie: session } })).status).toBe(401);
     expect(await (await fetch(url + "/", { headers: { cookie: session, accept: "text/html" } })).text()).toContain("Seus dados viram");
   });
@@ -103,13 +112,14 @@ describe("middleware", () => {
     expect(await login.json()).toMatchObject({ role: "admin" });
   });
 
-  it("recusa token inválido, e-mail fora da lista e e-mail não verificado", async () => {
-    let url = await start(google({ email: "intruso@gmail.com", email_verified: true }));
+  it("cadastro aberto: conta desconhecida entra como free; recusa token inválido e e-mail não verificado", async () => {
+    let url = await start(google({ email: "novo@gmail.com", email_verified: true, name: "Novo" }));
     const post = (credential: string) => fetch(url + "/api/auth/google", { method: "POST", body: JSON.stringify({ credential }) });
     expect((await post("token-ruim")).status).toBe(401);
-    const denied = await post("token-bom");
-    expect(denied.status).toBe(403);
-    expect(denied.headers.get("set-cookie")).toBeNull();
+    const login = await post("token-bom");
+    expect(login.status).toBe(200);
+    expect(await login.json()).toMatchObject({ email: "novo@gmail.com", role: "free" });
+    expect(login.headers.get("set-cookie")).toContain("minibi_session=");
     server!.close();
 
     url = await start(google({ email: "ana@gmail.com", email_verified: false }));

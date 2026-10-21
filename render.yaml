@@ -21,7 +21,7 @@ services:
       # Preenchidos no painel ao criar o Blueprint (não ficam no git):
       - key: GOOGLE_CLIENT_ID
         sync: false
-      # Administradores fixos; os demais usuários ficam no banco (tela Usuários).
+      # Administradores fixos; qualquer outra conta Google entra como "free".
       - key: ADMIN_EMAILS
         sync: false
       - key: DATABASE_URL

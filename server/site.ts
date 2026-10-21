@@ -102,7 +102,7 @@ const SQL = `<pre aria-label="Exemplo de SQL"><span class="c">-- Faturamento men
 
 const FAQ: [string, string][] = [
   ["Preciso instalar alguma coisa?", "Não. Tudo roda no navegador: importar, modelar, calcular e visualizar. Basta entrar com a sua conta Google."],
-  ["Como consigo acesso?", "O acesso é por convite. Se você entrar sem convite, um pedido de acesso vai para um administrador; depois da aprovação, é só entrar de novo."],
+  ["Como consigo acesso?", "É só entrar com a sua conta Google: no primeiro acesso a sua conta é criada na hora, no plano gratuito, sem esperar aprovação."],
   ["Onde ficam os meus relatórios?", "Na sua conta, num banco de dados. Cada pessoa vê só os próprios relatórios, e cada alteração é salva sozinha em poucos segundos."],
   ["Quais arquivos posso importar?", "CSV (o separador é detectado), Excel .xlsx (todas as planilhas) e JSON (listas de objetos; campos aninhados viram colunas como endereco.cidade)."],
   ["Preciso saber programar?", "Não. Visuais, filtros e a maioria das medidas se montam pela tela. Fórmulas e SQL estão lá para quem quiser ir além, e a IA monta painéis a partir de um pedido em texto."],
@@ -154,13 +154,13 @@ const PAGES: Record<string, Page> = {
           ["/recursos", "chart", "Recursos", "Importação, modelagem, fórmulas, análises, notebooks SQL e publicação."],
           ["/visuais", "trend", `${VISUAL_COUNT} visuais`, "Cada componente explicado: o que mostra, quando usar e quais campos preencher."],
           ["/ia", "spark", "Assistente de IA", "Peça o painel em português e veja a IA montar página, medidas e visuais."],
-          ["/seguranca", "lock", "Segurança e acesso", "Login com Google, acesso por convite e relatórios separados por conta."],
+          ["/seguranca", "lock", "Segurança e acesso", "Login com Google, conta criada na hora e relatórios separados por pessoa."],
           ["/duvidas", "question", "Dúvidas", "Instalação, arquivos aceitos, celular, compartilhamento e mais."],
         ].map(([href, ic, t, d]) => `<a class="tile reveal" href="${href}">${icon(ic)}<span><strong>${t}</strong><span>${d}</span></span><b aria-hidden="true">→</b></a>`).join("")}
       </div>
     </div>
   </section>
-  ${cta("Comece a analisar os seus dados", "Entre com a sua conta Google. No primeiro acesso, seu pedido vai para um administrador aprovar.")}`,
+  ${cta("Comece a analisar os seus dados", "Entre com a sua conta Google: a sua conta gratuita é criada na hora.")}`,
   },
 
   "/recursos": {
@@ -223,7 +223,7 @@ const PAGES: Record<string, Page> = {
         ${card("phone", "Layout para celular", "Os visuais empilhados na ordem de leitura; o relatório publicado troca para ele sozinho em telas pequenas.")}
         ${card("upload", "PNG e PDF", "Exporte a página como imagem ou imprima em PDF, sem os botões de edição.")}
         ${card("cloud", "Salvo na sua conta", "Relatórios na nuvem com salvamento automático; abra de qualquer computador.")}
-        ${card("users", "Gestão de usuários", "Convites, pedidos de acesso, papéis de administrador e bloqueio imediato.")}
+        ${card("users", "Gestão de usuários", "Cadastro na hora com a conta Google, papéis (gratuito, usuário e administrador) e bloqueio imediato.")}
         ${card("palette", "Temas e indicadores", "Tema claro ou escuro, paletas de cores e indicadores que guardam filtros e drill.")}
         ${card("gauge", "Analisador de desempenho", "Tempo, linhas percorridas e acertos de cache de cada visual da página.")}
         ${card("undo", "Desfazer e refazer", "Até 100 passos, com arrastos e digitação agrupados num passo só.")}
@@ -231,7 +231,7 @@ const PAGES: Record<string, Page> = {
       </div>
     </div>
   </section>
-  ${cta("Veja tudo isso com os seus dados", "Entre com a sua conta Google e comece por um relatório em branco ou pelo modelo de vendas.")}`,
+  ${cta("Veja tudo isso com os seus dados", "Entre com a sua conta Google — é gratuito — e comece por um relatório em branco ou pelo modelo de vendas.")}`,
   },
 
   "/visuais": {
@@ -325,33 +325,33 @@ const PAGES: Record<string, Page> = {
 
   "/seguranca": {
     title: "Segurança e acesso · Bahanle Analytics",
-    description: "Login com Google, acesso por convite, relatórios separados por conta e bloqueio imediato.",
+    description: "Login com Google, conta criada na hora, relatórios separados por pessoa e bloqueio imediato.",
     body: () => `
-  ${pageHero("Segurança e acesso", "Cada pessoa no seu lugar", "Login com Google, acesso controlado por administradores e relatórios separados por conta.")}
+  ${pageHero("Segurança e acesso", "Cada pessoa no seu lugar", "Login com Google, conta criada na hora e relatórios separados por pessoa — com administradores de olho.")}
   <section>
     <div class="wrap">
       <div class="grid">
         ${card("lock", "Login com Google", "A conta é verificada pelo Google; ninguém precisa criar nem guardar uma senha nova.")}
-        ${card("users", "Acesso por convite", "Administradores convidam pelo e-mail; quem chega sem convite vira um pedido de acesso.")}
+        ${card("users", "Conta na hora", "Quem entra com o Google pela primeira vez ganha uma conta gratuita na hora, sem formulário.")}
         ${card("cloud", "Relatórios por conta", "Cada pessoa vê e edita só os próprios relatórios, de qualquer computador.")}
         ${card("filter", "Bloqueio imediato", "Tirar o acesso de alguém derruba a sessão dela no pedido seguinte, mesmo com o app aberto.")}
-        ${card("model", "Papéis", "Administradores gerenciam pessoas; usuários trabalham nos próprios relatórios.")}
+        ${card("model", "Papéis", "Gratuito, usuário e administrador: administradores gerenciam as pessoas; os demais trabalham nos próprios relatórios.")}
         ${card("share", "Publicação controlada", "Só quem publica decide o que vai no HTML de leitura; o resto continua protegido pelo login.")}
       </div>
     </div>
   </section>
   <section class="alt">
     <div class="wrap">
-      ${head("Primeiro acesso", "Como alguém novo entra", "Quatro passos, com o administrador no controle.", true)}
+      ${head("Primeiro acesso", "Como alguém novo entra", "Sem formulário e sem esperar aprovação.", true)}
       <ol class="steps four">
         <li class="reveal">${icon("users")}<h3>Entra com Google</h3><p>A pessoa usa o botão do topo com a conta dela.</p></li>
-        <li class="reveal">${icon("question")}<h3>Vira um pedido</h3><p>Sem convite, o acesso fica pendente e ela vê um aviso.</p></li>
-        <li class="reveal">${icon("lock")}<h3>O admin aprova</h3><p>Na tela Usuários, com um clique — ou recusa.</p></li>
-        <li class="reveal">${icon("chart")}<h3>Pronto</h3><p>Ela entra de novo e já cai nos próprios relatórios.</p></li>
+        <li class="reveal">${icon("cloud")}<h3>Conta criada</h3><p>Na hora, no plano gratuito, com o nome e a foto da conta Google.</p></li>
+        <li class="reveal">${icon("chart")}<h3>Primeiro relatório</h3><p>Em branco ou a partir do modelo de vendas, salvo sozinho na conta.</p></li>
+        <li class="reveal">${icon("lock")}<h3>Sob controle</h3><p>Administradores trocam o papel ou bloqueiam pela tela Usuários.</p></li>
       </ol>
     </div>
   </section>
-  ${cta("Pronto para entrar?", "Use a sua conta Google. Se ainda não tiver convite, seu pedido vai para um administrador.")}`,
+  ${cta("Pronto para entrar?", "Use a sua conta Google: a sua conta gratuita é criada na hora.")}`,
   },
 
   "/duvidas": {

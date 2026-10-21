@@ -44,23 +44,28 @@ publicado** (HTML único) é um arquivo à parte e não passa pelo login.
 
 ### Usuários
 
-Com o banco ligado (`DATABASE_URL`), os usuários ficam na tabela `users`
-(`server/users.ts`):
+O cadastro é aberto: **qualquer conta Google entra**. No primeiro acesso a
+pessoa é cadastrada na hora, ativa, com o papel **`free`** (gratuito). Com o
+banco ligado (`DATABASE_URL`), os usuários ficam na tabela `users`
+(`server/users.ts`). Há três papéis: `free` (padrão de quem se cadastra),
+`user` e `admin` — por enquanto `free` e `user` têm as mesmas permissões; a
+diferença fica pronta para limites de plano.
 
-- **Administradores fixos** vêm de `ADMIN_EMAILS`: sempre entram e não dá para
-  bloqueá-los pela tela (assim ninguém se tranca fora).
+- **Administradores fixos** vêm de `ADMIN_EMAILS`: sempre entram como `admin` e
+  não dá para bloqueá-los pela tela (assim ninguém se tranca fora).
 - No menu da conta (seu nome, no canto), **👥 Usuários…** — só para
-  administradores — mostra todo mundo: convide pelo e-mail da conta Google
-  (como usuário ou administrador), bloqueie, desbloqueie, troque o papel ou
-  remova.
-- Quem entra com o Google sem convite vira um **pedido de acesso** (aparece
-  no topo da tela, com **Aprovar** e **Recusar**) e vê o aviso de que precisa
-  de aprovação.
-- `ALLOWED_EMAILS` (opcional) libera e-mails ou domínios inteiros
-  (`@empresa.com`) sem convite; um bloqueio na tela vale mais que ele.
+  administradores — mostra todo mundo, com a contagem por papel: troque o
+  papel, bloqueie, desbloqueie, remova ou cadastre alguém antes do primeiro
+  acesso. O bloqueio vale na hora, mesmo para quem está com o app aberto.
+- `ALLOWED_EMAILS` (opcional) faz e-mails ou domínios inteiros (`@empresa.com`)
+  entrarem já como `user`; um bloqueio na tela vale mais que ele.
+- Bancos de versões anteriores são migrados sozinhos na primeira consulta: o
+  papel `free` passa a ser aceito e os pedidos de acesso que estavam pendentes
+  viram contas ativas `free`.
 
-Cada usuário vê só os próprios relatórios em **Meus relatórios**. Sem banco,
-valem só `ADMIN_EMAILS` e `ALLOWED_EMAILS`.
+Cada pessoa vê só os próprios relatórios em **Meus relatórios**. Sem banco, todo
+mundo também entra (admin pelo `ADMIN_EMAILS`, `user` pelo `ALLOWED_EMAILS`,
+`free` para o resto), mas nada fica guardado.
 
 ## O que dá para fazer
 
@@ -166,7 +171,7 @@ ganhar um sufixo se já existir). Pode levar alguns minutos para valer.
   `render.yaml` e pede os valores marcados como secretos:
   - `GOOGLE_CLIENT_ID`: o ID do passo 3;
   - `ADMIN_EMAILS`: você (e outros administradores fixos); o resto das pessoas
-    você convida ou aprova depois, pela tela **Usuários**;
+    as outras pessoas entram sozinhas como `free`, e você ajusta pela tela **Usuários**;
   - `DATABASE_URL`: a URL do passo 2.
 
   O `SESSION_SECRET` é gerado pelo próprio Render e o `NODE_VERSION` é 24.

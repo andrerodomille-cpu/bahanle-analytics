@@ -21,7 +21,7 @@ function googleLogin(env: Record<string, string>): Plugin {
     name: "bahanle-google-login",
     configureServer(server) {
       for (const p of configProblems(config)) server.config.logger.warn(`⚠ Login: ${p}`);
-      if (!pool) server.config.logger.warn("⚠ DATABASE_URL não definido: usuários só pelo .env e relatórios na nuvem desligados.");
+      if (!pool) server.config.logger.warn("⚠ DATABASE_URL não definido: usuários não ficam guardados e relatórios na nuvem desligados.");
       for (const m of middlewares) server.middlewares.use(m);
     },
     configurePreviewServer(server) {

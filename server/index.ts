@@ -22,7 +22,7 @@ const TYPES: Record<string, string> = {
 const config = configFromEnv(process.env);
 for (const p of configProblems(config)) console.warn(`⚠ ${p}`);
 const pool = poolFromEnv(process.env);
-if (!pool) console.warn("⚠ DATABASE_URL não definido: usuários só pelo .env e relatórios na nuvem desligados.");
+if (!pool) console.warn("⚠ DATABASE_URL não definido: usuários não ficam guardados e relatórios na nuvem desligados.");
 const users = pool ? dbPolicy(pool, config) : null;
 const auth = authMiddleware(config, users ?? envPolicy(config));
 const admin = usersApi(users, config);

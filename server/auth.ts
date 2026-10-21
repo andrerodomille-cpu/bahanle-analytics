@@ -60,7 +60,6 @@ export function configFromEnv(env: Record<string, string | undefined>): AuthConf
 export function configProblems(c: AuthConfig): string[] {
   const out: string[] = [];
   if (!c.clientId) out.push("GOOGLE_CLIENT_ID não definido.");
-  if (!c.admins.length && !c.allowed.length) out.push("Defina ADMIN_EMAILS (quem administra os usuários): sem ele, ninguém entra.");
   if (c.secret.length < 32) out.push("SESSION_SECRET precisa ter pelo menos 32 caracteres.");
   return out;
 }

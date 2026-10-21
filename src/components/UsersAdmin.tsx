@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
-type Role = "admin" | "user";
+type Role = "admin" | "user" | "free";
 type Status = "active" | "pending" | "blocked";
 
 interface UserInfo {
@@ -25,16 +25,19 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
   return data as T;
 }
 
-const STATUS: Record<Status, string> = { active: "ativo", pending: "pediu acesso", blocked: "bloqueado" };
+/** Papéis na ordem em que aparecem nas listas; "free" é o de quem se cadastra sozinho. */
+const ROLES: [Role, string][] = [["free", "Gratuito (free)"], ["user", "Usuário (user)"], ["admin", "Administrador"]];
+const ROLE_LABEL: Record<Role, string> = { free: "gratuito", user: "usuário", admin: "administrador" };
 const fmtWhen = (iso?: string) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "nunca entrou");
 
-/** "Usuários" (só administradores): pedidos de acesso, convites, bloqueio e papel de cada pessoa. */
+/** "Usuários" (só administradores): quem entrou, papel de cada pessoa e bloqueio. */
 export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void }) {
   const [users, setUsers] = useState<UserInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>("Carregando…");
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("user");
+  const [role, setRole] = useState<Role>("free");
+  const [search, setSearch] = useState("");
 
   const run = async (label: string, task: () => Promise<void>) => {
     setError(null);
@@ -59,20 +62,30 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
   const patch = (u: UserInfo, body: Partial<Pick<UserInfo, "role" | "status">>) =>
     run("Salvando…", async () => replace(await call<UserInfo>(`/${encodeURIComponent(u.email)}`, "PATCH", body)));
   const remove = (u: UserInfo) => {
-    if (!confirm(`Remover ${u.email}? Os relatórios dele continuam no banco; se entrar de novo, vira um pedido de acesso.`)) return;
+    if (!confirm(`Remover ${u.email}? Os relatórios dele continuam no banco; se entrar de novo, é cadastrado outra vez como gratuito.`)) return;
     void run("Removendo…", async () => {
       await call(`/${encodeURIComponent(u.email)}`, "DELETE");
       setUsers((list) => list?.filter((x) => x.email !== u.email) ?? null);
     });
   };
-  const invite = () => run("Convidando…", async () => {
+  const add = () => run("Cadastrando…", async () => {
     const u = await call<UserInfo>("", "POST", { email, role });
     setUsers((list) => [u, ...(list ?? []).filter((x) => x.email !== u.email)]);
     setEmail("");
   });
 
-  const pending = users?.filter((u) => u.status === "pending") ?? [];
-  const others = users?.filter((u) => u.status !== "pending") ?? [];
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (users ?? []).filter((u) => !q || u.email.includes(q) || u.name.toLowerCase().includes(q));
+  }, [users, search]);
+  const counts = useMemo(() => {
+    const c = { free: 0, user: 0, admin: 0, blocked: 0 };
+    for (const u of users ?? []) {
+      if (u.status === "blocked") c.blocked++;
+      else c[u.role]++;
+    }
+    return c;
+  }, [users]);
 
   const row = (u: UserInfo) => {
     const locked = u.fromEnv || u.email === me.toLowerCase();
@@ -82,20 +95,15 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
         <span className="user-main">
           <strong>{u.name || u.email}</strong>
           <span className="small muted">
-            {u.name && `${u.email} · `}{u.role === "admin" ? "administrador" : "usuário"} · {STATUS[u.status]} · {fmtWhen(u.lastLoginAt)}
+            {u.name && `${u.email} · `}<span className={`role-tag ${u.role}`}>{ROLE_LABEL[u.role]}</span>
+            {u.status === "blocked" && " · bloqueado"} · {fmtWhen(u.lastLoginAt)}
             {u.fromEnv && " · fixo no .env"}{u.email === me.toLowerCase() && " · você"}
           </span>
         </span>
-        {u.status === "pending" ? (
-          <>
-            <button className="primary" disabled={!!busy} onClick={() => void patch(u, { status: "active" })}>Aprovar</button>
-            <button disabled={!!busy} onClick={() => void patch(u, { status: "blocked" })}>Recusar</button>
-          </>
-        ) : !locked && (
+        {!locked && (
           <>
             <select value={u.role} disabled={!!busy} title="Papel" onChange={(e) => void patch(u, { role: e.target.value as Role })}>
-              <option value="user">Usuário</option>
-              <option value="admin">Administrador</option>
+              {ROLES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
             </select>
             <button disabled={!!busy} onClick={() => void patch(u, { status: u.status === "blocked" ? "active" : "blocked" })}>
               {u.status === "blocked" ? "Desbloquear" : "Bloquear"}
@@ -111,39 +119,40 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
     <div className="modal-backdrop" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal users-dialog">
         <h3>👥 Usuários</h3>
+        <p className="small muted">
+          Qualquer conta Google pode entrar: no primeiro acesso a pessoa é cadastrada como <strong>gratuito (free)</strong>.
+          Aqui você troca o papel e bloqueia — o bloqueio vale na hora, mesmo para quem está com o app aberto.
+        </p>
+        {users && (
+          <div className="users-counts">
+            <span><b>{counts.free}</b> gratuitos</span>
+            <span><b>{counts.user}</b> usuários</span>
+            <span><b>{counts.admin}</b> administradores</span>
+            {counts.blocked > 0 && <span><b>{counts.blocked}</b> bloqueados</span>}
+          </div>
+        )}
         <form className="field-row users-invite" onSubmit={(e) => {
           e.preventDefault();
-          if (email.trim()) void invite();
+          if (email.trim()) void add();
         }}>
           <label className="field" style={{ flex: 2 }}>
-            Convidar (conta Google)
+            Cadastrar antes do primeiro acesso (conta Google)
             <input type="email" value={email} placeholder="nome@gmail.com" onChange={(e) => setEmail(e.target.value)} />
           </label>
           <label className="field" style={{ flex: 1 }}>
             Papel
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-              <option value="user">Usuário</option>
-              <option value="admin">Administrador</option>
+              {ROLES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
             </select>
           </label>
-          <button className="primary" type="submit" disabled={!!busy || !email.trim()}>Convidar</button>
+          <button className="primary" type="submit" disabled={!!busy || !email.trim()}>Cadastrar</button>
         </form>
-        <p className="small muted">
-          Quem não foi convidado e entra com o Google vira um <strong>pedido de acesso</strong> aqui. Bloquear tira o acesso na hora, mesmo de quem está com o app aberto.
-        </p>
 
-        {pending.length > 0 && (
-          <>
-            <div className="users-title">Pedidos de acesso ({pending.length})</div>
-            <ul className="users-list">{pending.map(row)}</ul>
-          </>
+        {users && users.length > 6 && (
+          <input className="users-search" type="search" placeholder="Buscar por nome ou e-mail" value={search} onChange={(e) => setSearch(e.target.value)} />
         )}
-        {users && (
-          <>
-            <div className="users-title">Com acesso ou bloqueados ({others.length})</div>
-            <ul className="users-list">{others.map(row)}</ul>
-          </>
-        )}
+        {users && <ul className="users-list">{shown.map(row)}</ul>}
+        {users && shown.length === 0 && <div className="small muted">Ninguém encontrado.</div>}
 
         {busy && <div className="small muted">{busy}</div>}
         {error && <div className="error small">{error}</div>}

@@ -27,7 +27,7 @@ export interface Account {
   email: string;
   name: string;
   picture?: string;
-  role?: "admin" | "user";
+  role?: "admin" | "user" | "free";
 }
 
 /** Texto de um filtro por intervalo: "entre 10 e 20", "≥ 10", "≤ 20". */
