@@ -95,16 +95,29 @@ como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 ## Relatórios na nuvem (Postgres / Neon)
 
 Com `DATABASE_URL` no `.env`, cada usuário salva os próprios relatórios no
-banco (o dono é o e-mail do login). No menu **Arquivo**:
+banco (o dono é o e-mail do login).
 
-- **☁ Salvar na nuvem** (**Ctrl+S**): a primeira vez pede um nome; depois
-  atualiza o mesmo relatório. A barra mostra o nome e **• não salvo** quando há
-  alterações (seleções nos gráficos não contam). Se outra aba ou computador
-  salvou depois que você abriu, o app pergunta antes de sobrescrever.
-- **☁ Salvar uma cópia na nuvem…**: cria outro relatório a partir do aberto.
-- **☁ Meus relatórios…**: lista, abre, renomeia e exclui.
+**Página inicial.** Depois do login, o app abre no **Início**
+(`src/components/Home.tsx`): botão **+ Novo relatório**, os modelos para
+começar (em branco ou o **Modelo de vendas**), o atalho **Continuar de onde
+parou** e a grade de **Meus relatórios**, com busca, ordenação, renomear e
+excluir. O logotipo na barra do editor volta para o Início.
 
-O `localStorage` continua sendo o rascunho automático da tela. A tabela `reports` é criada sozinha na
+**Salvar.** Todo relatório criado pelo Início já nasce salvo na conta, e cada
+alteração é gravada sozinha uns 2 segundos depois da última mexida. A barra
+mostra o nome do relatório com **✓ salvo**, **• não salvo**, **salvando…** ou um
+aviso; seleções nos gráficos não contam. Se outra aba ou computador salvou
+depois, o salvamento automático para e o **Ctrl+S** pergunta antes de
+sobrescrever. Fechar a aba com algo pendente pede confirmação.
+
+No menu **Arquivo**: **Meus relatórios** (volta ao Início), **Novo
+relatório…**, **Novo a partir do modelo…**, **Salvar** (Ctrl+S), **Salvar uma
+cópia…** e, à parte, **Exportar como arquivo (.json)** / **Importar arquivo
+(.json)** para levar um relatório como arquivo.
+
+O rascunho do navegador (`localStorage`) é só uma rede de segurança e é
+separado por conta: duas pessoas no mesmo navegador não veem o trabalho uma da
+outra. A tabela `reports` é criada sozinha na
 primeira consulta (`server/reports.ts`): o relatório inteiro vai numa coluna
 `jsonb`, e `version` impede que duas abas sobrescrevam uma à outra (409).
 
@@ -161,9 +174,9 @@ ganhar um sufixo se já existir). Pode levar alguns minutos para valer.
   aberta sem login.
 - Cada `git push` na `main` publica de novo (`autoDeploy`).
 
-**5. Conferir.** Abra o endereço do serviço: deve aparecer **Entrar com
-Google**; entre com um e-mail da lista, use **Arquivo › Salvar na nuvem** e
-recarregue em outro navegador — o relatório está em **Meus relatórios**.
+**5. Conferir.** Abra o endereço do serviço: deve aparecer a tela **Entrar**;
+entre com o e-mail de `ADMIN_EMAILS`, crie um relatório pelo **Início** e abra
+o endereço em outro navegador — o relatório está em **Meus relatórios**.
 
 **Bom saber**
 - No plano gratuito, o serviço dorme após 15 minutos sem acesso; o primeiro
@@ -205,7 +218,7 @@ recarregue em outro navegador — o relatório está em **Meus relatórios**.
 | KPI, cascata, mapa de calor | `src/components/MoreVisuals.tsx` | `waterfallSteps`: base + variações por categoria = total; escala de cores entre mín. e máx. |
 | Texto dinâmico | `fillTemplate` em `src/engine/query.ts` | `[Medida]` avaliada no contexto de filtro da caixa de texto |
 | Mapas | `src/engine/geo.ts`, `src/model/geo/` | Projeção equirretangular, associação valor → UF, contornos do IBGE |
-| Relatórios na nuvem (app) | `src/model/cloud.ts`, `src/components/CloudReports.tsx` | Vínculo id + versão; "não salvo" comparando referências campo a campo (`contentChanged`) |
+| Relatórios na nuvem (app) | `src/model/cloud.ts`, `src/components/Home.tsx` | Vínculo id + versão; "não salvo" comparando referências campo a campo (`contentChanged`) |
 | API e banco | `server/reports.ts` | Rotas REST por usuário, jsonb no Postgres, controle de concorrência otimista por versão |
 | Usuários | `server/users.ts`, `src/components/UsersAdmin.tsx` | Política de acesso (admins do .env + tabela `users`), pedidos de acesso, cache curto do papel por e-mail |
 | Login | `server/auth.ts`, `server/index.ts` | ID token do Google (JWT) verificado no servidor → lista de permitidos → cookie de sessão assinado |

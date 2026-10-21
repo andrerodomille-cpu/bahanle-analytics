@@ -65,7 +65,7 @@ describe("middleware", () => {
     const url = await start(google({}));
     const page = await fetch(url + "/", { headers: { accept: "text/html" } });
     const html = await page.text();
-    expect(html).toContain("Entre com sua conta Google");
+    expect(html).toContain("Use sua conta Google");
     expect(html).toContain(`data-client_id="${config.clientId}"`);
     expect(html).not.toContain("APP");
     expect((await fetch(url + "/src/main.tsx")).status).toBe(401);
@@ -94,7 +94,7 @@ describe("middleware", () => {
     server!.close();
     url = await start(google({}), { ...config, allowed: ["@empresa.com"] });
     expect((await fetch(url + "/api/auth/me", { headers: { cookie: session } })).status).toBe(401);
-    expect(await (await fetch(url + "/", { headers: { cookie: session, accept: "text/html" } })).text()).toContain("Entre com sua conta Google");
+    expect(await (await fetch(url + "/", { headers: { cookie: session, accept: "text/html" } })).text()).toContain("Use sua conta Google");
   });
 
   it("administrador do .env entra com papel admin", async () => {

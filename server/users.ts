@@ -19,7 +19,10 @@ export interface Profile {
   picture?: string;
 }
 
-export type LoginResult = { ok: true; role: Role } | { ok: false; reason: string };
+export type LoginResult =
+  | { ok: true; role: Role }
+  /** pending: pedido de acesso aguardando aprovação (não é erro). */
+  | { ok: false; reason: string; pending?: boolean };
 
 /** Regras de acesso usadas pelo login. */
 export interface AccessPolicy {
@@ -126,7 +129,7 @@ export function dbPolicy(pool: Pool, c: AuthConfig) {
       } else {
         await q("UPDATE users SET name = $2, picture = $3 WHERE email = $1", [email, p.name, p.picture ?? null]);
       }
-      return { ok: false, reason: "Pedido de acesso enviado. Um administrador precisa aprovar antes de você entrar." };
+      return { ok: false, pending: true, reason: "Pedido de acesso enviado. Assim que um administrador aprovar, é só entrar de novo." };
     },
 
     async check(email) {

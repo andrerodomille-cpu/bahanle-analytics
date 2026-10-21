@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState } from "react";
 import type { ButtonAction, Column, Measure, PaletteName, Report, Value, ValueRange, Visual, VisualType } from "./model/types";
 import { fieldKey, fieldLabel, newId } from "./model/types";
-import { captureBookmark, historyReducer, loadReport, migrate, saveReport } from "./model/store";
+import { captureBookmark, emptyReport, historyReducer, loadReport, migrate, saveReport } from "./model/store";
 import { sampleReport } from "./model/sampleData";
 import { formatValue } from "./model/format";
 import { PALETTES, PaletteContext } from "./model/theme";
@@ -15,13 +15,20 @@ import { PerfPanel } from "./components/Package4Visuals";
 import { ArrangePane } from "./components/Arrange";
 import { NotebookView } from "./components/Notebook";
 import { AiAssistant } from "./components/AiAssistant";
-import { CloudReports } from "./components/CloudReports";
+import { BrandMark, Home, NameDialog } from "./components/Home";
 import { UsersAdmin } from "./components/UsersAdmin";
-import type { CloudLink } from "./model/cloud";
-import { CloudError, contentChanged, createCloudReport, loadLink, saveCloudReport, storeLink } from "./model/cloud";
+import type { CloudLink, CloudSummary } from "./model/cloud";
+import { CloudError, contentChanged, createCloudReport, loadLink, openCloudReport, saveCloudReport, storeLink } from "./model/cloud";
 import { expandGroups } from "./engine/arrange";
 
 type Tab = "report" | "data" | "model" | "notebook";
+
+export interface Account {
+  email: string;
+  name: string;
+  picture?: string;
+  role?: "admin" | "user";
+}
 
 /** Texto de um filtro por intervalo: "entre 10 e 20", "≥ 10", "≤ 20". */
 function summarizeRange(r: ValueRange): string {
@@ -90,10 +97,17 @@ const DEFAULT_MEASURES: Partial<Record<VisualType, number>> = {
  * `viewOnly` é o relatório publicado: quem recebe o HTML navega, filtra, faz
  * drill e exporta, mas não edita o modelo nem o layout.
  */
-export default function App({ initial, viewOnly = false }: { initial?: Report; viewOnly?: boolean }) {
+export default function App({ initial, viewOnly = false, account = null }: {
+  initial?: Report;
+  viewOnly?: boolean;
+  /** Conta Google da sessão (o servidor só entrega o app depois do login). */
+  account?: Account | null;
+}) {
+  // Rascunho e vínculo com a nuvem ficam separados por conta no navegador.
+  const owner = account?.email;
   const [history, dispatch] = useReducer(historyReducer, undefined, () => ({
     past: [],
-    present: initial ?? loadReport(),
+    present: initial ?? loadReport(owner),
     future: [],
   }));
   const report = history.present;
@@ -119,26 +133,28 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   // Analisador de desempenho: painel aberto, época do motor (cache frio) e tique (cache quente).
   const [perfOpen, setPerfOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  // Conta Google da sessão (o servidor só entrega o app depois do login).
-  const [user, setUser] = useState<{ email: string; name: string; picture?: string; role?: "admin" | "user" } | null>(null);
+  const user = viewOnly ? null : account;
   const [usersOpen, setUsersOpen] = useState(false);
-  useEffect(() => {
-    if (viewOnly) return;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then(setUser)
-      .catch(() => setUser(null));
-  }, [viewOnly]);
 
   // Relatório da nuvem aberto no editor e o conteúdo dele como está salvo lá.
-  const [cloud, setCloud] = useState<CloudLink | null>(() => (viewOnly ? null : loadLink()));
-  const [cloudOpen, setCloudOpen] = useState(false);
+  const [cloud, setCloud] = useState<CloudLink | null>(() => (viewOnly ? null : loadLink(owner)));
+  // Com login, o app abre na página inicial (relatórios da conta); o editor vem depois.
+  const [view, setView] = useState<"home" | "editor">(viewOnly || !account ? "editor" : "home");
+  // Janela de nome (no lugar do prompt do navegador): resolve com o nome ou null.
+  const [naming, setNaming] = useState<{ title: string; initial: string; action: string; resolve: (n: string | null) => void } | null>(null);
+  const askName = (title: string, initialName: string, action: string) =>
+    new Promise<string | null>((resolve) => setNaming({ title, initial: initialName, action, resolve }));
   const cloudSaved = useRef(report);
+  const cloudRef = useRef(cloud);
+  cloudRef.current = cloud;
+  // Um salvamento por vez (manual ou automático); estado do automático para a barra.
+  const saving = useRef(false);
+  const [autoSave, setAutoSave] = useState<"ok" | "saving" | "conflict" | "error">("ok");
   const dirty = cloud !== null && contentChanged(cloudSaved.current, report);
   const linkCloud = (link: CloudLink | null, saved: Report = report) => {
     cloudSaved.current = saved;
     setCloud(link);
-    storeLink(link);
+    storeLink(link, owner);
   };
 
   const logout = async () => {
@@ -152,9 +168,9 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   // Salva automaticamente (com atraso, para não gravar a cada pixel arrastado).
   useEffect(() => {
     if (viewOnly) return;
-    const t = setTimeout(() => saveReport(report), 400);
+    const t = setTimeout(() => saveReport(report, owner), 400);
     return () => clearTimeout(t);
-  }, [report, viewOnly]);
+  }, [report, viewOnly, owner]);
 
   // Se a página atual sumir (excluída ou relatório trocado), vai para a primeira.
   const page = report.pages.find((p) => p.id === pageId) ?? report.pages[0];
@@ -269,10 +285,30 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
    * Salvar na nuvem: atualiza o relatório aberto ou cria um novo (pede o nome).
    * Se outra aba ou computador salvou antes (409), pergunta se sobrescreve.
    */
-  const saveToCloud = (asCopy = false) => run("Salvando na nuvem", async () => {
+  const saveToCloud = async (asCopy = false) => {
+    // Relatório novo ou cópia: o nome vem antes (a janela não conta como "salvando").
+    let name: string | null = null;
+    if (!cloud || asCopy) {
+      name = cloud
+        ? await askName("Salvar uma cópia", `${cloud.name} (cópia)`, "Salvar cópia")
+        : await askName("Salvar relatório", "Novo relatório", "Salvar");
+      if (!name) return;
+    }
+    await run("Salvando", async () => {
+      if (saving.current) return;
+      saving.current = true;
+      try {
+        await saveNow(name);
+      } finally {
+        saving.current = false;
+      }
+    });
+  };
+
+  const saveNow = async (newName: string | null) => {
     const snapshot = report;
     let link: CloudLink;
-    if (cloud && !asCopy) {
+    if (cloud && !newName) {
       try {
         link = await saveCloudReport(cloud, snapshot);
       } catch (e) {
@@ -288,13 +324,95 @@ Sobrescrever com a versão desta tela?`)) return;
         }
       }
     } else {
-      const suggestion = cloud ? `${cloud.name} (cópia)` : page.name;
-      const name = prompt("Nome do relatório na nuvem:", suggestion)?.trim();
-      if (!name) return;
-      link = await createCloudReport(name, snapshot);
+      link = await createCloudReport(newName ?? "Novo relatório", snapshot);
     }
     linkCloud(link, snapshot);
-  });
+    setAutoSave("ok");
+  };
+
+  /**
+   * Salvamento automático: com o relatório já na nuvem, cada alteração é
+   * gravada alguns segundos depois da última mexida. Se outra aba ou outro
+   * computador salvou antes (409), para e pede um Ctrl+S (que pergunta).
+   */
+  useEffect(() => {
+    if (viewOnly || !cloud || !dirty || autoSave === "conflict") return;
+    const t = setTimeout(async () => {
+      if (saving.current) return;
+      saving.current = true;
+      setAutoSave("saving");
+      const snapshot = report;
+      const target = cloud;
+      try {
+        const link = await saveCloudReport(target, snapshot);
+        // Trocou de relatório enquanto salvava: o vínculo novo não muda.
+        if (cloudRef.current?.id === target.id) linkCloud(link, snapshot);
+        setAutoSave("ok");
+      } catch (e) {
+        setAutoSave(e instanceof CloudError && (e.status === 409 || e.status === 404) ? "conflict" : "error");
+      } finally {
+        saving.current = false;
+      }
+    }, autoSave === "error" ? 15_000 : 2_500);
+    return () => clearTimeout(t);
+  }, [report, cloud, dirty, autoSave, viewOnly]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fechar a aba com alterações que ainda não foram para a nuvem: o navegador pergunta.
+  useEffect(() => {
+    if (!cloud || !dirty) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [cloud, dirty]);
+
+  /** Arquivo › Novo relatório: em branco (ou o exemplo), já salvo na nuvem com o nome escolhido. */
+  /** O editor tem conteúdo que não está em nenhum relatório salvo (rascunho sem nome). */
+  const unnamedDraft = !cloud && (report.visuals.length > 0 || report.tables.length > 0);
+
+  /**
+   * Antes de trocar o relatório do editor: grava o que falta do atual (sem
+   * esperar o automático) e, se for um rascunho sem nome, pergunta.
+   */
+  const leaveCurrent = async (): Promise<boolean> => {
+    if (cloud && dirty && !saving.current) {
+      try {
+        linkCloud(await saveCloudReport(cloud, report), report);
+      } catch {
+        return confirm(`Não deu para salvar as últimas alterações de "${cloud.name}". Continuar mesmo assim?`);
+      }
+    }
+    return !unnamedDraft || confirm("O rascunho sem nome deste navegador será descartado. Continuar? (Para guardar, use Arquivo › Salvar.)");
+  };
+
+  /** Coloca um relatório no editor (aberto da lista ou recém-criado). */
+  const showReport = (next: Report, link: CloudLink | null) => {
+    dispatch({ type: "reset", report: next });
+    linkCloud(link, next);
+    setSelectedIds([]);
+    setPageId(next.pages[0].id);
+    setTab("report");
+    setAutoSave("ok");
+    setView("editor");
+  };
+
+  /** Novo relatório: em branco ou a partir do modelo, já criado na conta com o nome escolhido. */
+  const startNew = async (example = false) => {
+    const name = await askName(example ? "Novo a partir do modelo" : "Novo relatório", example ? "Vendas (modelo)" : "Novo relatório", "Criar");
+    if (!name || !(await leaveCurrent())) return;
+    const next = example ? sampleReport() : emptyReport();
+    if (!user) return showReport(next, null);
+    await run("Criando", async () => showReport(next, await createCloudReport(name, next)));
+  };
+
+  /** Abrir um relatório da página inicial. */
+  const openFromHome = async (r: CloudSummary) => {
+    if (cloud?.id === r.id) return setView("editor");
+    if (!(await leaveCurrent())) return;
+    await run(`Abrindo ${r.name}`, async () => {
+      const { link, report: opened } = await openCloudReport(r.id);
+      showReport(opened, link);
+    });
+  };
 
   // Ctrl+S salva na nuvem (em vez do "salvar página" do navegador).
   useEffect(() => {
@@ -332,11 +450,47 @@ Sobrescrever com a versão desta tela?`)) return;
   const pageFilters = report.filters.filter((f) => pageVisualIds.has(f.sourceVisualId));
   const palette = PALETTES[report.theme.palette] ?? PALETTES.padrao;
 
+  const userMenu = user && (
+    <Menu label={user.name.split(" ")[0]} align="right">
+      <div className="menu-note user-card">
+        {user.picture && <img src={user.picture} alt="" referrerPolicy="no-referrer" />}
+        <span><strong>{user.name}</strong><br />{user.email}</span>
+      </div>
+      <div className="menu-sep" />
+      {view === "editor" && <button className="menu-item" onClick={() => setView("home")}>⌂ Meus relatórios</button>}
+      {user.role === "admin" && <button className="menu-item" onClick={() => setUsersOpen(true)}>👥 Usuários…</button>}
+      <button className="menu-item" onClick={() => void logout()}>Sair</button>
+    </Menu>
+  );
+
   return (
     <PaletteContext.Provider value={palette.colors}>
       <div className={"app" + (viewOnly ? " view-only" : "")} data-theme={report.theme.mode}>
+        {view === "home" && user && (
+          <>
+            <header className="topbar">
+              <span className="brand"><BrandMark />Bahanle <span>Analytics</span></span>
+              <span style={{ flex: 1 }} />
+              {busy && <span className="muted-on-dark">{busy}…</span>}
+              {userMenu}
+            </header>
+            <Home
+              firstName={user.name.split(" ")[0]}
+              current={cloud ? { id: cloud.id, name: cloud.name, unsaved: dirty }
+                : unnamedDraft ? { name: "Rascunho sem nome", unsaved: true } : null}
+              onContinue={() => setView("editor")}
+              onOpen={(r) => void openFromHome(r)}
+              onCreate={(from) => void startNew(from === "example")}
+              askName={askName}
+              onCurrentChanged={(s) => (s && cloud ? linkCloud({ ...cloud, name: s.name, version: s.version }, cloudSaved.current) : linkCloud(null))}
+            />
+          </>
+        )}
+        {view === "editor" && (<>
         <header className="topbar">
-          <strong className="brand">Bahanle Analytics</strong>
+          {viewOnly || !user
+            ? <span className="brand"><BrandMark />Bahanle <span>Analytics</span></span>
+            : <button className="brand" title="Início: meus relatórios" onClick={() => setView("home")}><BrandMark />Bahanle <span>Analytics</span></button>}
           {!viewOnly && (
             <nav>
               {([["report", "Relatório"], ["data", "Dados"], ["model", "Modelo"], ["notebook", "Notebooks"]] as [Tab, string][]).map(([k, label]) => (
@@ -346,8 +500,13 @@ Sobrescrever com a versão desta tela?`)) return;
           )}
           {viewOnly && <span className="muted-on-dark">Relatório publicado · somente leitura</span>}
           {cloud && (
-            <span className="cloud-status" title={dirty ? "Alterações ainda não salvas na nuvem (Ctrl+S)" : "Salvo na nuvem"}>
-              ☁ {cloud.name}{dirty && <span className="cloud-dirty"> • não salvo</span>}
+            <span className="cloud-status" title={dirty ? "Alterações ainda não salvas (salva sozinho em instantes; Ctrl+S salva já)" : "Tudo salvo"}>
+              {cloud.name}
+              {autoSave === "conflict" ? <span className="cloud-dirty"> ⚠ salvo em outro lugar — Ctrl+S</span>
+                : autoSave === "error" && dirty ? <span className="cloud-dirty"> ⚠ sem conexão, tentando de novo</span>
+                : autoSave === "saving" ? <span> · salvando…</span>
+                : dirty ? <span className="cloud-dirty"> • não salvo</span>
+                : <span className="cloud-ok"> ✓ salvo</span>}
             </span>
           )}
           <span style={{ flex: 1 }} />
@@ -451,16 +610,19 @@ Sobrescrever com a versão desta tela?`)) return;
               <>
                 {user && (
                   <>
+                    <button className="menu-item" onClick={() => setView("home")}>⌂ Meus relatórios</button>
+                    <button className="menu-item" onClick={() => void startNew()}>Novo relatório…</button>
+                    <button className="menu-item" onClick={() => void startNew(true)}>Novo a partir do modelo…</button>
+                    <div className="menu-sep" />
                     <button className="menu-item" onClick={() => void saveToCloud()}>
-                      ☁ Salvar na nuvem{cloud ? `: ${cloud.name}` : "…"} <span className="menu-key">Ctrl+S</span>
+                      {cloud ? "Salvar" : "Salvar…"} <span className="menu-key">Ctrl+S</span>
                     </button>
-                    {cloud && <button className="menu-item" onClick={() => void saveToCloud(true)}>☁ Salvar uma cópia na nuvem…</button>}
-                    <button className="menu-item" onClick={() => setCloudOpen(true)}>☁ Meus relatórios…</button>
+                    {cloud && <button className="menu-item" onClick={() => void saveToCloud(true)}>Salvar uma cópia…</button>}
                     <div className="menu-sep" />
                   </>
                 )}
-                <button className="menu-item" onClick={exportJson}>Salvar relatório (.json)</button>
-                <button className="menu-item" onClick={() => fileRef.current?.click()}>Abrir relatório (.json)</button>
+                <button className="menu-item" onClick={exportJson}>Exportar como arquivo (.json)</button>
+                <button className="menu-item" onClick={() => fileRef.current?.click()}>Importar arquivo (.json)</button>
                 <div className="menu-sep" />
               </>
             )}
@@ -487,33 +649,10 @@ Sobrescrever com a versão desta tela?`)) return;
                 <button className="menu-item" onClick={() => void run("Publicando", () => publishReport(report))}>
                   Publicar relatório (HTML para compartilhar)
                 </button>
-                <div className="menu-sep" />
-                <button
-                  className="menu-item"
-                  onClick={() => {
-                    if (confirm("Descartar o relatório atual e voltar ao exemplo?")) {
-                      dispatch({ type: "reset", report: sampleReport() });
-                      linkCloud(null);
-                      setSelectedId(null);
-                    }
-                  }}
-                >
-                  Restaurar exemplo
-                </button>
               </>
             )}
           </Menu>
-          {user && (
-            <Menu label={user.name.split(" ")[0]} align="right">
-              <div className="menu-note user-card">
-                {user.picture && <img src={user.picture} alt="" referrerPolicy="no-referrer" />}
-                <span><strong>{user.name}</strong><br />{user.email}</span>
-              </div>
-              <div className="menu-sep" />
-              {user.role === "admin" && <button className="menu-item" onClick={() => setUsersOpen(true)}>👥 Usuários…</button>}
-              <button className="menu-item" onClick={() => void logout()}>Sair</button>
-            </Menu>
-          )}
+          {userMenu}
           <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => importJson(e.target.files?.[0])} />
         </header>
 
@@ -660,20 +799,17 @@ Sobrescrever com a versão desta tela?`)) return;
             onClose={() => setAiOpen(false)}
           />
         )}
+        </>)}
         {usersOpen && user && <UsersAdmin me={user.email} onClose={() => setUsersOpen(false)} />}
-        {cloudOpen && (
-          <CloudReports
-            link={cloud}
-            dirty={dirty}
-            onOpen={(link, opened) => {
-              dispatch({ type: "reset", report: opened });
-              linkCloud(link, opened);
-              setSelectedIds([]);
-              setPageId(opened.pages[0].id);
-              setTab("report");
+        {naming && (
+          <NameDialog
+            title={naming.title}
+            initial={naming.initial}
+            action={naming.action}
+            onDone={(name) => {
+              naming.resolve(name);
+              setNaming(null);
             }}
-            onLinkChange={(link) => (link ? linkCloud(link, cloudSaved.current) : linkCloud(null))}
-            onClose={() => setCloudOpen(false)}
           />
         )}
         {editingColumn && (

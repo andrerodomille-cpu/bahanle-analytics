@@ -3,7 +3,7 @@
 // (id, nome e versão) para o próximo "Salvar" atualizar o mesmo registro.
 
 import type { Report } from "./types";
-import { migrate } from "./store";
+import { accountKey, migrate, readAccountItem } from "./store";
 
 export interface CloudSummary {
   id: string;
@@ -87,22 +87,23 @@ export async function renameCloudReport(id: string, name: string, version: numbe
 
 export const deleteCloudReport = (id: string) => call<void>(`/${id}`, { method: "DELETE" });
 
-// O vínculo sobrevive a recarregar a página (o relatório em si já fica no localStorage).
+// O vínculo sobrevive a recarregar a página (o relatório em si já fica no
+// localStorage), separado por conta como o rascunho.
 const LINK_KEY = "mini-bi-cloud-link";
 
-export function loadLink(): CloudLink | null {
+export function loadLink(owner?: string): CloudLink | null {
   try {
-    const l = JSON.parse(localStorage.getItem(LINK_KEY) ?? "null") as CloudLink | null;
+    const l = JSON.parse(readAccountItem(LINK_KEY, owner) ?? "null") as CloudLink | null;
     return l && typeof l.id === "string" && typeof l.version === "number" ? l : null;
   } catch {
     return null;
   }
 }
 
-export function storeLink(link: CloudLink | null) {
+export function storeLink(link: CloudLink | null, owner?: string) {
   try {
-    if (link) localStorage.setItem(LINK_KEY, JSON.stringify(link));
-    else localStorage.removeItem(LINK_KEY);
+    if (link) localStorage.setItem(accountKey(LINK_KEY, owner), JSON.stringify(link));
+    else localStorage.removeItem(accountKey(LINK_KEY, owner));
   } catch {
     // sem armazenamento: o vínculo vale só até recarregar
   }

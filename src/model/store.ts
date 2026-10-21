@@ -1,6 +1,7 @@
 import type {
   Notebook, Bookmark, CrossFilter, DrillthroughState, FieldRef, ValueRange, Measure, Page, PaneFilter, QueryStep, Relationship, Report, ReportTheme, Table, Value, Visual,
 } from "./types";
+import { newId } from "./types";
 import { tableFromQuery } from "./importers";
 import { sampleReport } from "./sampleData";
 import { materialize, removeColumn, setColumn } from "./calculated";
@@ -330,19 +331,59 @@ export function migrate(report: Report): Report {
 
 const STORAGE_KEY = "mini-bi-report-v1";
 
-export function loadReport(): Report {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return migrate(JSON.parse(raw) as Report);
-  } catch {
-    // armazenamento indisponível ou corrompido: volta ao exemplo
+/** Chave do armazenamento local por conta: cada pessoa tem o seu rascunho no mesmo navegador. */
+export const accountKey = (base: string, owner?: string) => (owner ? `${base}:${owner.trim().toLowerCase()}` : base);
+
+/**
+ * Lê o item da conta. Na primeira vez de uma conta, adota o que estava salvo
+ * sem conta (versões anteriores do app) e apaga o antigo, para não aparecer
+ * para a próxima pessoa que entrar no mesmo navegador.
+ */
+export function readAccountItem(base: string, owner?: string): string | null {
+  const own = localStorage.getItem(accountKey(base, owner));
+  if (own !== null || !owner) return own;
+  const legacy = localStorage.getItem(base);
+  if (legacy !== null) {
+    localStorage.setItem(accountKey(base, owner), legacy);
+    localStorage.removeItem(base);
   }
-  return sampleReport();
+  return legacy;
 }
 
-export function saveReport(report: Report) {
+/** Relatório em branco: uma página, sem dados. */
+export function emptyReport(): Report {
+  return {
+    pages: [{ id: newId(), name: "Página 1" }],
+    tables: [],
+    relationships: [],
+    measures: [],
+    visuals: [],
+    filters: [],
+    paneFilters: [],
+    bookmarks: [],
+    theme: { mode: "light", palette: "padrao" },
+    notebooks: [],
+  };
+}
+
+/** Rascunho salvo neste navegador para a conta (null se não houver). */
+export function loadDraft(owner?: string): Report | null {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(report));
+    const raw = readAccountItem(STORAGE_KEY, owner);
+    if (raw) return migrate(JSON.parse(raw) as Report);
+  } catch {
+    // armazenamento indisponível ou corrompido
+  }
+  return null;
+}
+
+export function loadReport(owner?: string): Report {
+  return loadDraft(owner) ?? sampleReport();
+}
+
+export function saveReport(report: Report, owner?: string) {
+  try {
+    localStorage.setItem(accountKey(STORAGE_KEY, owner), JSON.stringify(report));
   } catch {
     // ex.: CSV grande demais para o localStorage; o app segue funcionando
   }
