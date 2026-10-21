@@ -115,6 +115,20 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   // Analisador de desempenho: painel aberto, época do motor (cache frio) e tique (cache quente).
   const [perfOpen, setPerfOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  // Conta Google da sessão (o servidor só entrega o app depois do login).
+  const [user, setUser] = useState<{ email: string; name: string; picture?: string } | null>(null);
+  useEffect(() => {
+    if (viewOnly) return;
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setUser)
+      .catch(() => setUser(null));
+  }, [viewOnly]);
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+    location.reload();
+  };
   const [engineEpoch, setEngineEpoch] = useState(0);
   const [renderTick, setRenderTick] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -412,6 +426,16 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
               </>
             )}
           </Menu>
+          {user && (
+            <Menu label={user.name.split(" ")[0]} align="right">
+              <div className="menu-note user-card">
+                {user.picture && <img src={user.picture} alt="" referrerPolicy="no-referrer" />}
+                <span><strong>{user.name}</strong><br />{user.email}</span>
+              </div>
+              <div className="menu-sep" />
+              <button className="menu-item" onClick={() => void logout()}>Sair</button>
+            </Menu>
+          )}
           <input ref={fileRef} type="file" accept=".json" hidden onChange={(e) => importJson(e.target.files?.[0])} />
         </header>
 

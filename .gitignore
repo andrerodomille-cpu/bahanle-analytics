@@ -2,3 +2,5 @@ node_modules
 dist
 *.log
 public/viewer
+.env
+.env.local

@@ -10,10 +10,32 @@ npm install
 npm run dev     # gera o visualizador e abre em http://localhost:5173
 npm test        # testes do motor, consultas, datas e publicação
 npm run build   # build de produção em dist/
+npm start       # serve dist/ com login (lê o .env)
 ```
 
-Roda inteiro no navegador: os dados ficam em memória e no `localStorage`
-(salve em `.json` pelo menu **Arquivo** para guardar ou levar a outro lugar).
+Os dados ficam em memória e no `localStorage` do navegador (salve em `.json`
+pelo menu **Arquivo** para guardar ou levar a outro lugar). Um servidor pequeno
+só cuida do **login com Google**: sem sessão, nenhum arquivo do app é entregue.
+
+## Login com Google
+
+Só os e-mails da lista entram — tanto no `npm run dev` quanto em produção.
+
+1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
+   crie uma credencial **ID do cliente OAuth** do tipo **Aplicativo da Web** e
+   cadastre em *Origens JavaScript autorizadas*: `http://localhost`,
+   `http://localhost:5173` e o endereço de produção.
+2. Copie `.env.example` para `.env` e preencha `GOOGLE_CLIENT_ID`,
+   `ALLOWED_EMAILS` (e-mails ou `@dominio.com`) e `SESSION_SECRET`.
+3. `npm run dev` para desenvolver; em produção, `npm run build && npm start`
+   (porta 8080, sirva atrás de HTTPS).
+
+Como funciona (`server/auth.ts`): o botão do Google devolve um ID token; o
+servidor confere a assinatura (chaves públicas do Google), o emissor, o público
+(seu Client ID), se o e-mail é verificado e se está na lista, e grava um cookie
+de sessão `HttpOnly` assinado com HMAC. A lista é conferida de novo a cada
+pedido, então tirar alguém dela corta o acesso na hora. O **relatório
+publicado** (HTML único) é um arquivo à parte e não passa pelo login.
 
 ## O que dá para fazer
 
@@ -73,6 +95,7 @@ como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 | KPI, cascata, mapa de calor | `src/components/MoreVisuals.tsx` | `waterfallSteps`: base + variações por categoria = total; escala de cores entre mín. e máx. |
 | Texto dinâmico | `fillTemplate` em `src/engine/query.ts` | `[Medida]` avaliada no contexto de filtro da caixa de texto |
 | Mapas | `src/engine/geo.ts`, `src/model/geo/` | Projeção equirretangular, associação valor → UF, contornos do IBGE |
+| Login | `server/auth.ts`, `server/index.ts` | ID token do Google (JWT) verificado no servidor → lista de permitidos → cookie de sessão assinado |
 | Assistente de IA | `src/model/ai.ts`, `src/components/AiAssistant.tsx` | Esquema do modelo no prompt → plano JSON forçado por JSON Schema → validação de campos e medidas → ações num passo só de desfazer |
 | Análises | `src/engine/analytics.ts` | Regressão linear e intervalo de predição, média móvel, quartis e bigodes de Tukey, regra de Sturges, influenciadores, decomposição |
 

@@ -848,3 +848,7 @@ label.check input { width: auto; }
 .ai-actions .check { margin: 0; }
 .ai-actions .check input { width: auto; }
 @media print { .ai-panel { display: none !important; } }
+
+/* Conta Google no menu do usuário */
+.user-card { display: flex; align-items: center; gap: 10px; white-space: nowrap; text-transform: none; letter-spacing: normal; font-size: 13px; color: var(--text); }
+.user-card img { width: 32px; height: 32px; border-radius: 50%; }

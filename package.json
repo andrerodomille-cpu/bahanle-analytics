@@ -9,10 +9,12 @@
     "build:viewer": "vite build --mode viewer",
     "build": "tsc --noEmit && npm run build:viewer && vite build",
     "preview": "vite preview",
+    "start": "node --env-file-if-exists=.env server/index.ts",
     "test": "vitest run"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",
+    "jose": "^6.2.13",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -20,6 +22,7 @@
     "recharts": "^2.15.0"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
     "@types/papaparse": "^5.3.15",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
