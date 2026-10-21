@@ -16,6 +16,7 @@ import { ArrangePane } from "./components/Arrange";
 import { NotebookView } from "./components/Notebook";
 import { AiAssistant } from "./components/AiAssistant";
 import { CloudReports } from "./components/CloudReports";
+import { UsersAdmin } from "./components/UsersAdmin";
 import type { CloudLink } from "./model/cloud";
 import { CloudError, contentChanged, createCloudReport, loadLink, saveCloudReport, storeLink } from "./model/cloud";
 import { expandGroups } from "./engine/arrange";
@@ -119,7 +120,8 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
   const [perfOpen, setPerfOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   // Conta Google da sessão (o servidor só entrega o app depois do login).
-  const [user, setUser] = useState<{ email: string; name: string; picture?: string } | null>(null);
+  const [user, setUser] = useState<{ email: string; name: string; picture?: string; role?: "admin" | "user" } | null>(null);
+  const [usersOpen, setUsersOpen] = useState(false);
   useEffect(() => {
     if (viewOnly) return;
     fetch("/api/auth/me")
@@ -508,6 +510,7 @@ Sobrescrever com a versão desta tela?`)) return;
                 <span><strong>{user.name}</strong><br />{user.email}</span>
               </div>
               <div className="menu-sep" />
+              {user.role === "admin" && <button className="menu-item" onClick={() => setUsersOpen(true)}>👥 Usuários…</button>}
               <button className="menu-item" onClick={() => void logout()}>Sair</button>
             </Menu>
           )}
@@ -657,6 +660,7 @@ Sobrescrever com a versão desta tela?`)) return;
             onClose={() => setAiOpen(false)}
           />
         )}
+        {usersOpen && user && <UsersAdmin me={user.email} onClose={() => setUsersOpen(false)} />}
         {cloudOpen && (
           <CloudReports
             link={cloud}

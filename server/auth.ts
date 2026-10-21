@@ -1,10 +1,11 @@
-// Login com Google: só quem está na lista de e-mails permitidos abre o app.
+// Login com Google: só quem tem acesso (ver server/users.ts) abre o app.
 //
 // O botão "Entrar com Google" (Google Identity Services) devolve um ID token
 // (JWT assinado pelo Google). O servidor confere a assinatura, o emissor, o
-// público (nosso Client ID) e a lista de permitidos, e grava uma sessão num
+// público (nosso Client ID) e as regras de acesso, e grava uma sessão num
 // cookie HttpOnly assinado com HMAC. Sem sessão válida, nenhum arquivo do app
-// é entregue: a resposta é a página de login.
+// é entregue: a resposta é a página de login. O acesso é conferido de novo a
+// cada pedido: bloquear alguém derruba a sessão dele.
 //
 // O mesmo middleware roda no `vite` (dev e preview) e no servidor de produção.
 
@@ -12,11 +13,14 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { json, readBody, type Next } from "./http.ts";
+import type { AccessPolicy, Role } from "./users.ts";
 
 export interface AuthConfig {
   /** Client ID OAuth do Google Cloud (tipo "Aplicativo da Web"). */
   clientId: string;
-  /** E-mails permitidos; "@empresa.com" libera o domínio inteiro. Lista vazia = ninguém entra. */
+  /** Administradores fixos (ADMIN_EMAILS): sempre entram e gerenciam os usuários. */
+  admins: string[];
+  /** Usuários liberados pelo .env (ALLOWED_EMAILS); "@empresa.com" libera o domínio inteiro. */
   allowed: string[];
   /** Segredo da assinatura do cookie de sessão. */
   secret: string;
@@ -30,18 +34,21 @@ export interface SessionUser {
   picture?: string;
 }
 
-/** Pedido que passou pelo login: as rotas seguintes leem o usuário daqui. */
-export type AuthedRequest = IncomingMessage & { user?: SessionUser };
+/** Pedido que passou pelo login: as rotas seguintes leem o usuário (e o papel atual) daqui. */
+export type AuthedRequest = IncomingMessage & { user?: SessionUser & { role: Role } };
 
 /** Confere o ID token do Google e devolve as declarações (claims) dele. */
 export type TokenVerifier = (token: string, clientId: string) => Promise<Record<string, unknown>>;
 
 export const COOKIE = "minibi_session";
 
+const emailList = (v: string | undefined) => (v ?? "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+
 export function configFromEnv(env: Record<string, string | undefined>): AuthConfig {
   return {
     clientId: env.GOOGLE_CLIENT_ID?.trim() ?? "",
-    allowed: (env.ALLOWED_EMAILS ?? "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean),
+    admins: emailList(env.ADMIN_EMAILS),
+    allowed: emailList(env.ALLOWED_EMAILS),
     secret: env.SESSION_SECRET?.trim() ?? "",
     sessionHours: Number(env.SESSION_HOURS) > 0 ? Number(env.SESSION_HOURS) : 12,
   };
@@ -51,7 +58,7 @@ export function configFromEnv(env: Record<string, string | undefined>): AuthConf
 export function configProblems(c: AuthConfig): string[] {
   const out: string[] = [];
   if (!c.clientId) out.push("GOOGLE_CLIENT_ID não definido.");
-  if (!c.allowed.length) out.push("ALLOWED_EMAILS vazio: ninguém conseguiria entrar.");
+  if (!c.admins.length && !c.allowed.length) out.push("Defina ADMIN_EMAILS (quem administra os usuários): sem ele, ninguém entra.");
   if (c.secret.length < 32) out.push("SESSION_SECRET precisa ter pelo menos 32 caracteres.");
   return out;
 }
@@ -93,8 +100,7 @@ export function readSession(value: string | undefined, c: AuthConfig, now = Date
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
   try {
     const s = JSON.parse(Buffer.from(data, "base64url").toString()) as SessionUser & { exp: number };
-    // A lista pode ter mudado depois do login: confere de novo a cada pedido.
-    if (!(s.exp > now) || !isAllowed(s.email, c.allowed)) return null;
+    if (!(s.exp > now)) return null;
     return { email: s.email, name: s.name, picture: s.picture };
   } catch {
     return null;
@@ -121,9 +127,9 @@ function sessionCookie(req: IncomingMessage, value: string, maxAge: number): str
 /**
  * Middleware no formato do Connect (o mesmo do Vite): trata /api/auth/* e
  * barra todo o resto sem sessão. Navegações recebem a página de login;
- * os demais pedidos, 401.
+ * os demais pedidos, 401. `policy` decide quem entra (envPolicy ou dbPolicy).
  */
-export function authMiddleware(c: AuthConfig, verify: TokenVerifier = verifyGoogleToken) {
+export function authMiddleware(c: AuthConfig, policy: AccessPolicy, verify: TokenVerifier = verifyGoogleToken) {
   const problems = configProblems(c);
   return async (req: IncomingMessage, res: ServerResponse, next: Next) => {
     try {
@@ -140,16 +146,21 @@ export function authMiddleware(c: AuthConfig, verify: TokenVerifier = verifyGoog
         }
         const email = String(claims.email ?? "");
         if (!email || claims.email_verified !== true) return json(res, 403, { error: "A conta Google não tem e-mail verificado." });
-        if (!isAllowed(email, c.allowed)) return json(res, 403, { error: `${email} não tem acesso ao Bahanle Analytics.` });
         const user: SessionUser = { email, name: String(claims.name ?? email), picture: claims.picture ? String(claims.picture) : undefined };
-        return json(res, 200, user, { "Set-Cookie": sessionCookie(req, createSession(user, c), c.sessionHours * 3600) });
+        const access = await policy.login(user);
+        if (!access.ok) return json(res, 403, { error: access.reason });
+        return json(res, 200, { ...user, role: access.role }, {
+          "Set-Cookie": sessionCookie(req, createSession(user, c), c.sessionHours * 3600),
+        });
       }
 
       if (path === "/api/auth/logout" && req.method === "POST") {
         return json(res, 200, { ok: true }, { "Set-Cookie": sessionCookie(req, "", 0) });
       }
 
-      const user = readSession(cookieValue(req, COOKIE), c);
+      const session = readSession(cookieValue(req, COOKIE), c);
+      const role = session ? await policy.check(session.email) : null;
+      const user = session && role ? { ...session, role } : null;
       if (path === "/api/auth/me") return user ? json(res, 200, user) : json(res, 401, { error: "Sem sessão." });
       if (user) {
         (req as AuthedRequest).user = user;

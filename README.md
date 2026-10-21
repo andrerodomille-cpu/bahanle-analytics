@@ -19,23 +19,46 @@ só cuida do **login com Google**: sem sessão, nenhum arquivo do app é entregu
 
 ## Login com Google
 
-Só os e-mails da lista entram — tanto no `npm run dev` quanto em produção.
+Só entra quem tem acesso — tanto no `npm run dev` quanto em produção.
 
 1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
    crie uma credencial **ID do cliente OAuth** do tipo **Aplicativo da Web** e
    cadastre em *Origens JavaScript autorizadas*: `http://localhost`,
    `http://localhost:5173` e o endereço de produção.
-2. Copie `.env.example` para `.env` e preencha `GOOGLE_CLIENT_ID`,
-   `ALLOWED_EMAILS` (e-mails ou `@dominio.com`) e `SESSION_SECRET`.
-3. `npm run dev` para desenvolver; em produção, `npm run build && npm start`
+2. Na tela de consentimento OAuth, **publique o app** (sai do modo Teste, que
+   aceita no máximo 100 e-mails cadastrados à mão). Como o app só pede nome,
+   e-mail e foto, não precisa da verificação do Google.
+3. Copie `.env.example` para `.env` e preencha `GOOGLE_CLIENT_ID`,
+   `ADMIN_EMAILS` (você) e `SESSION_SECRET`.
+4. `npm run dev` para desenvolver; em produção, `npm run build && npm start`
    (porta 8080, sirva atrás de HTTPS).
 
 Como funciona (`server/auth.ts`): o botão do Google devolve um ID token; o
 servidor confere a assinatura (chaves públicas do Google), o emissor, o público
-(seu Client ID), se o e-mail é verificado e se está na lista, e grava um cookie
-de sessão `HttpOnly` assinado com HMAC. A lista é conferida de novo a cada
-pedido, então tirar alguém dela corta o acesso na hora. O **relatório
+(seu Client ID), se o e-mail é verificado e se a pessoa tem acesso, e grava um
+cookie de sessão `HttpOnly` assinado com HMAC. O acesso é conferido de novo a
+cada pedido, então bloquear alguém corta o acesso na hora. O **relatório
 publicado** (HTML único) é um arquivo à parte e não passa pelo login.
+
+### Usuários
+
+Com o banco ligado (`DATABASE_URL`), os usuários ficam na tabela `users`
+(`server/users.ts`):
+
+- **Administradores fixos** vêm de `ADMIN_EMAILS`: sempre entram e não dá para
+  bloqueá-los pela tela (assim ninguém se tranca fora).
+- No menu da conta (seu nome, no canto), **👥 Usuários…** — só para
+  administradores — mostra todo mundo: convide pelo e-mail da conta Google
+  (como usuário ou administrador), bloqueie, desbloqueie, troque o papel ou
+  remova.
+- Quem entra com o Google sem convite vira um **pedido de acesso** (aparece
+  no topo da tela, com **Aprovar** e **Recusar**) e vê o aviso de que precisa
+  de aprovação.
+- `ALLOWED_EMAILS` (opcional) libera e-mails ou domínios inteiros
+  (`@empresa.com`) sem convite; um bloqueio na tela vale mais que ele.
+
+Cada usuário vê só os próprios relatórios em **Meus relatórios**. Sem banco,
+valem só `ADMIN_EMAILS` e `ALLOWED_EMAILS`.
 
 ## O que dá para fazer
 
@@ -127,7 +150,8 @@ ganhar um sufixo se já existir). Pode levar alguns minutos para valer.
 - **New › Blueprint**, conecte o GitHub e escolha o repositório: o Render lê o
   `render.yaml` e pede os valores marcados como secretos:
   - `GOOGLE_CLIENT_ID`: o ID do passo 3;
-  - `ALLOWED_EMAILS`: quem entra (`voce@gmail.com, @empresa.com`);
+  - `ADMIN_EMAILS`: você (e outros administradores fixos); o resto das pessoas
+    você convida ou aprova depois, pela tela **Usuários**;
   - `DATABASE_URL`: a URL do passo 2.
 
   O `SESSION_SECRET` é gerado pelo próprio Render e o `NODE_VERSION` é 24.
@@ -152,8 +176,8 @@ recarregue em outro navegador — o relatório está em **Meus relatórios**.
   publicado conversar com ele, libere a origem antes de abrir o Ollama, ex.:
   `OLLAMA_ORIGINS=https://bahanle-analytics.onrender.com`; o navegador pode pedir
   permissão para acessar a rede local.
-- Para tirar o acesso de alguém, edite `ALLOWED_EMAILS` no Render: a sessão
-  da pessoa deixa de valer no pedido seguinte.
+- Para tirar o acesso de alguém, use **Bloquear** na tela **Usuários**: a
+  sessão da pessoa deixa de valer no pedido seguinte.
 
 ## Mapa de estudo: conceito do Power BI → código
 
@@ -183,6 +207,7 @@ recarregue em outro navegador — o relatório está em **Meus relatórios**.
 | Mapas | `src/engine/geo.ts`, `src/model/geo/` | Projeção equirretangular, associação valor → UF, contornos do IBGE |
 | Relatórios na nuvem (app) | `src/model/cloud.ts`, `src/components/CloudReports.tsx` | Vínculo id + versão; "não salvo" comparando referências campo a campo (`contentChanged`) |
 | API e banco | `server/reports.ts` | Rotas REST por usuário, jsonb no Postgres, controle de concorrência otimista por versão |
+| Usuários | `server/users.ts`, `src/components/UsersAdmin.tsx` | Política de acesso (admins do .env + tabela `users`), pedidos de acesso, cache curto do papel por e-mail |
 | Login | `server/auth.ts`, `server/index.ts` | ID token do Google (JWT) verificado no servidor → lista de permitidos → cookie de sessão assinado |
 | Assistente de IA | `src/model/ai.ts`, `src/components/AiAssistant.tsx` | Esquema do modelo no prompt → plano JSON forçado por JSON Schema → validação de campos e medidas → ações num passo só de desfazer |
 | Análises | `src/engine/analytics.ts` | Regressão linear e intervalo de predição, média móvel, quartis e bigodes de Tukey, regra de Sturges, influenciadores, decomposição |

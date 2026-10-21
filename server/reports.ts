@@ -3,9 +3,9 @@
 // coluna jsonb; `version` impede que duas abas sobrescrevam uma à outra.
 
 import { randomUUID } from "node:crypto";
-import pg from "pg";
 import type { AuthedRequest } from "./auth.ts";
 import { HttpError, json, readJson, type Next } from "./http.ts";
+import { withSchema, type Pool } from "./db.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 export interface ReportSummary {
@@ -67,18 +67,8 @@ function toJsonb(data: unknown): string {
   return text;
 }
 
-export function pgReportStore(connectionString: string): ReportStore & { close(): Promise<void> } {
-  const pool = new pg.Pool({ connectionString, max: 5 });
-  // Cria a tabela na primeira consulta (e de novo se aquela tentativa falhar).
-  let ready: Promise<unknown> | null = null;
-  const q = async <T extends pg.QueryResultRow>(sql: string, params: unknown[]) => {
-    ready ??= pool.query(SCHEMA).catch((e) => {
-      ready = null;
-      throw e;
-    });
-    await ready;
-    return pool.query<T>(sql, params);
-  };
+export function pgReportStore(pool: Pool): ReportStore {
+  const q = withSchema(pool, SCHEMA);
 
   return {
     async list(owner) {
@@ -110,14 +100,7 @@ export function pgReportStore(connectionString: string): ReportStore & { close()
       const r = await q(`DELETE FROM reports WHERE owner = $1 AND id = $2`, [owner, id]);
       return (r.rowCount ?? 0) > 0;
     },
-    close: () => pool.end(),
   };
-}
-
-/** Banco configurado no .env (DATABASE_URL); sem ele, as rotas respondem 503. */
-export function storeFromEnv(env: Record<string, string | undefined>) {
-  const url = env.DATABASE_URL?.trim();
-  return url ? pgReportStore(url) : null;
 }
 
 // ---------------- Rotas ----------------

@@ -3,6 +3,7 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { AuthedRequest } from "./auth.ts";
+import pg from "pg";
 import { pgReportStore, reportsApi, type ReportStore } from "./reports.ts";
 
 /** Rodam contra um Postgres de verdade: TEST_DATABASE_URL=postgres://… npm test */
@@ -11,16 +12,18 @@ const DB = process.env.TEST_DATABASE_URL;
 const report = (title = "x") => ({ pages: [{ id: "p1", name: title }], tables: [], visuals: [], measures: [] });
 
 describe.skipIf(!DB)("API de relatórios (Postgres)", () => {
-  let store: ReturnType<typeof pgReportStore>;
+  let pool: pg.Pool;
+  let store: ReportStore;
   let server: Server | undefined;
   // Um dono por execução: os testes não enxergam dados de execuções anteriores.
   const ana = `ana-${randomUUID()}@gmail.com`;
   const bia = `bia-${randomUUID()}@empresa.com`;
 
   beforeAll(() => {
-    store = pgReportStore(DB!);
+    pool = new pg.Pool({ connectionString: DB! });
+    store = pgReportStore(pool);
   });
-  afterAll(() => store.close());
+  afterAll(() => pool.end());
   afterEach(() => server?.close());
 
   /** Servidor de teste: o cabeçalho x-user faz o papel do login. */
@@ -28,7 +31,7 @@ describe.skipIf(!DB)("API de relatórios (Postgres)", () => {
     const api = reportsApi(s, { maxBytes });
     server = createServer((req, res) => {
       const email = req.headers["x-user"];
-      if (typeof email === "string") (req as AuthedRequest).user = { email, name: email };
+      if (typeof email === "string") (req as AuthedRequest).user = { email, name: email, role: "user" };
       void api(req, res, (err) => {
         res.writeHead(err ? 500 : 404).end(err ? String(err) : "fora da API");
       });

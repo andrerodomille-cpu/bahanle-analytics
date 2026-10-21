@@ -6,7 +6,9 @@ import { stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { authMiddleware, configFromEnv, configProblems } from "./auth.ts";
-import { reportsApi, storeFromEnv } from "./reports.ts";
+import { poolFromEnv } from "./db.ts";
+import { pgReportStore, reportsApi } from "./reports.ts";
+import { dbPolicy, envPolicy, usersApi } from "./users.ts";
 
 const ROOT = resolve(import.meta.dirname, "..", "dist");
 const PORT = Number(process.env.PORT) || 8080;
@@ -19,10 +21,12 @@ const TYPES: Record<string, string> = {
 
 const config = configFromEnv(process.env);
 for (const p of configProblems(config)) console.warn(`⚠ ${p}`);
-const auth = authMiddleware(config);
-const store = storeFromEnv(process.env);
-if (!store) console.warn("⚠ DATABASE_URL não definido: relatórios na nuvem desligados.");
-const api = reportsApi(store);
+const pool = poolFromEnv(process.env);
+if (!pool) console.warn("⚠ DATABASE_URL não definido: usuários só pelo .env e relatórios na nuvem desligados.");
+const users = pool ? dbPolicy(pool, config) : null;
+const auth = authMiddleware(config, users ?? envPolicy(config));
+const admin = usersApi(users, config);
+const reports = reportsApi(pool ? pgReportStore(pool) : null);
 
 /** Arquivo pedido dentro de dist/; caminhos sem arquivo caem no index.html (app de página única). */
 async function serveStatic(req: IncomingMessage, res: ServerResponse) {
@@ -45,7 +49,7 @@ function fail(res: ServerResponse, err: unknown) {
   res.end();
 }
 
-// /healthz (aberto, para o health check do Render) → login → API → arquivos do app.
+// /healthz (aberto, para o health check do Render) → login → usuários → relatórios → arquivos do app.
 createServer((req, res) => {
   if (req.url === "/healthz") {
     res.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" }).end("ok");
@@ -53,6 +57,9 @@ createServer((req, res) => {
   }
   void auth(req, res, (err) => {
     if (err) return fail(res, err);
-    void api(req, res, (err) => (err ? fail(res, err) : void serveStatic(req, res).catch((e) => fail(res, e))));
+    void admin(req, res, (err) => {
+      if (err) return fail(res, err);
+      void reports(req, res, (err) => (err ? fail(res, err) : void serveStatic(req, res).catch((e) => fail(res, e))));
+    });
   });
 }).listen(PORT, () => console.log(`Bahanle Analytics em http://localhost:${PORT}`));

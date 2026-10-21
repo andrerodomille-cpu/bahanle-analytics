@@ -3,23 +3,29 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { authMiddleware, configFromEnv, configProblems } from "./server/auth.ts";
-import { reportsApi, storeFromEnv } from "./server/reports.ts";
+import { poolFromEnv } from "./server/db.ts";
+import { pgReportStore, reportsApi } from "./server/reports.ts";
+import { dbPolicy, envPolicy, usersApi } from "./server/users.ts";
 
-/** Login com Google e API de relatórios também no `npm run dev` e no `vite preview` (ver server/). */
+/** Login com Google, usuários e relatórios também no `npm run dev` e no `vite preview` (ver server/). */
 function googleLogin(env: Record<string, string>): Plugin {
   const config = configFromEnv(env);
-  const store = storeFromEnv(env);
+  const pool = poolFromEnv(env);
+  const users = pool ? dbPolicy(pool, config) : null;
+  const middlewares = [
+    authMiddleware(config, users ?? envPolicy(config)),
+    usersApi(users, config),
+    reportsApi(pool ? pgReportStore(pool) : null),
+  ];
   return {
     name: "bahanle-google-login",
     configureServer(server) {
       for (const p of configProblems(config)) server.config.logger.warn(`⚠ Login: ${p}`);
-      if (!store) server.config.logger.warn("⚠ DATABASE_URL não definido: relatórios na nuvem desligados.");
-      server.middlewares.use(authMiddleware(config));
-      server.middlewares.use(reportsApi(store));
+      if (!pool) server.config.logger.warn("⚠ DATABASE_URL não definido: usuários só pelo .env e relatórios na nuvem desligados.");
+      for (const m of middlewares) server.middlewares.use(m);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(authMiddleware(config));
-      server.middlewares.use(reportsApi(store));
+      for (const m of middlewares) server.middlewares.use(m);
     },
   };
 }

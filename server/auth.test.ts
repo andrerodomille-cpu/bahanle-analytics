@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { authMiddleware, configFromEnv, configProblems, createSession, isAllowed, readSession } from "./auth.ts";
 import type { TokenVerifier } from "./auth.ts";
+import { envPolicy } from "./users.ts";
 
 const config = configFromEnv({
   GOOGLE_CLIENT_ID: "cliente.apps.googleusercontent.com",
@@ -14,6 +15,7 @@ describe("configuração e lista de permitidos", () => {
   it("lê o .env e aponta o que falta", () => {
     expect(configProblems(config)).toEqual([]);
     expect(configProblems(configFromEnv({}))).toHaveLength(3);
+    expect(configProblems(configFromEnv({ GOOGLE_CLIENT_ID: "x", ADMIN_EMAILS: "a@b.com", SESSION_SECRET: "x".repeat(40) }))).toEqual([]);
   });
 
   it("aceita e-mails exatos e domínios, sem diferenciar maiúsculas", () => {
@@ -39,10 +41,7 @@ describe("sessão", () => {
     expect(readSession(s, { ...config, secret: "y".repeat(40) }, 0)).toBeNull();
   });
 
-  it("cai quando o e-mail sai da lista", () => {
-    const s = createSession(user, config, 0);
-    expect(readSession(s, { ...config, allowed: ["@empresa.com"] }, 1)).toBeNull();
-  });
+
 });
 
 describe("middleware", () => {
@@ -51,7 +50,7 @@ describe("middleware", () => {
 
   /** Sobe um servidor de teste com o middleware e um "app" que responde "APP". */
   async function start(verify: TokenVerifier, cfg = config) {
-    const mw = authMiddleware(cfg, verify);
+    const mw = authMiddleware(cfg, envPolicy(cfg), verify);
     server = createServer((req, res) => void mw(req, res, () => res.end("APP")));
     await new Promise<void>((r) => server!.listen(0, r));
     return `http://127.0.0.1:${(server!.address() as AddressInfo).port}`;
@@ -86,6 +85,22 @@ describe("middleware", () => {
 
     const out = await fetch(url + "/api/auth/logout", { method: "POST", headers: { cookie: session } });
     expect(out.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  it("sessão válida cai quando a política tira o acesso (e-mail saiu da lista)", async () => {
+    const session = `minibi_session=${createSession({ email: "ana@gmail.com", name: "Ana" }, config)}`;
+    let url = await start(google({}));
+    expect(await (await fetch(url + "/api/auth/me", { headers: { cookie: session } })).json()).toMatchObject({ role: "user" });
+    server!.close();
+    url = await start(google({}), { ...config, allowed: ["@empresa.com"] });
+    expect((await fetch(url + "/api/auth/me", { headers: { cookie: session } })).status).toBe(401);
+    expect(await (await fetch(url + "/", { headers: { cookie: session, accept: "text/html" } })).text()).toContain("Entre com sua conta Google");
+  });
+
+  it("administrador do .env entra com papel admin", async () => {
+    const url = await start(google({ email: "Chefe@Gmail.com", email_verified: true, name: "Chefe" }), { ...config, admins: ["chefe@gmail.com"] });
+    const login = await fetch(url + "/api/auth/google", { method: "POST", body: JSON.stringify({ credential: "token-bom" }) });
+    expect(await login.json()).toMatchObject({ role: "admin" });
   });
 
   it("recusa token inválido, e-mail fora da lista e e-mail não verificado", async () => {
