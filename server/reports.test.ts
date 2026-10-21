@@ -31,7 +31,7 @@ describe.skipIf(!DB)("API de relatórios (Postgres)", () => {
     const api = reportsApi(s, { maxBytes });
     server = createServer((req, res) => {
       const email = req.headers["x-user"];
-      if (typeof email === "string") (req as AuthedRequest).user = { email, name: email, role: "user" };
+      if (typeof email === "string") (req as AuthedRequest).user = { email, name: email, role: "free" };
       void api(req, res, (err) => {
         res.writeHead(err ? 500 : 404).end(err ? String(err) : "fora da API");
       });

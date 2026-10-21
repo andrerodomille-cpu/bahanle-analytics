@@ -3,6 +3,17 @@
 // topo traz o menu e o "Entrar com Google". Cores da marca: amarelo e vermelho.
 
 import { mini, VISUAL_COUNT, VISUAL_GROUPS } from "./site-visuals.ts";
+import { formatPrice, planOfVisual, PLANS, visualsOf } from "../src/model/plans.ts";
+import type { VisualType } from "../src/model/types.ts";
+
+/** Nome de cada visual, como nas fichas. */
+const VISUAL_NAME = new Map(VISUAL_GROUPS.flatMap((g) => g.items.map((v) => [v.id, v.name] as const)));
+const planBadge = (type: string) => {
+  const p = planOfVisual(type as VisualType);
+  return `<span class="plan-badge p-${p.id}">${p.name}</span>`;
+};
+const priceTag = (price: number) =>
+  price === 0 ? `<b>Grátis</b>` : `<b>${formatPrice(price)}</b><span>/mês</span>`;
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 
@@ -155,6 +166,7 @@ const PAGES: Record<string, Page> = {
           ["/visuais", "trend", `${VISUAL_COUNT} visuais`, "Cada componente explicado: o que mostra, quando usar e quais campos preencher."],
           ["/ia", "spark", "Assistente de IA", "Peça o painel em português e veja a IA montar página, medidas e visuais."],
           ["/seguranca", "lock", "Segurança e acesso", "Login com Google, conta criada na hora e relatórios separados por pessoa."],
+          ["/planos", "cloud", "Planos", "Do gratuito ao avançado: o que cada plano libera e quanto custa."],
           ["/duvidas", "question", "Dúvidas", "Instalação, arquivos aceitos, celular, compartilhamento e mais."],
         ].map(([href, ic, t, d]) => `<a class="tile reveal" href="${href}">${icon(ic)}<span><strong>${t}</strong><span>${d}</span></span><b aria-hidden="true">→</b></a>`).join("")}
       </div>
@@ -223,7 +235,7 @@ const PAGES: Record<string, Page> = {
         ${card("phone", "Layout para celular", "Os visuais empilhados na ordem de leitura; o relatório publicado troca para ele sozinho em telas pequenas.")}
         ${card("upload", "PNG e PDF", "Exporte a página como imagem ou imprima em PDF, sem os botões de edição.")}
         ${card("cloud", "Salvo na sua conta", "Relatórios na nuvem com salvamento automático; abra de qualquer computador.")}
-        ${card("users", "Gestão de usuários", "Cadastro na hora com a conta Google, papéis (gratuito, usuário e administrador) e bloqueio imediato.")}
+        ${card("users", "Gestão de usuários", "Cadastro na hora com a conta Google, planos por conta, administradores e bloqueio imediato.")}
         ${card("palette", "Temas e indicadores", "Tema claro ou escuro, paletas de cores e indicadores que guardam filtros e drill.")}
         ${card("gauge", "Analisador de desempenho", "Tempo, linhas percorridas e acertos de cache de cada visual da página.")}
         ${card("undo", "Desfazer e refazer", "Até 100 passos, com arrastos e digitação agrupados num passo só.")}
@@ -249,7 +261,7 @@ const PAGES: Record<string, Page> = {
         ${g.items.map((v) => `<article class="vcard reveal" id="v-${v.id}">
           <div class="vart">${mini(v.id)}</div>
           <div class="vbody">
-            <h3>${v.name}</h3>
+            <h3>${v.name} ${planBadge(v.id)}</h3>
             <p>${v.what}</p>
             <p class="when"><strong>Quando usar:</strong> ${v.when}</p>
             <div class="fields"><span>Campos</span><ul>${v.fields.map((f) => {
@@ -335,7 +347,7 @@ const PAGES: Record<string, Page> = {
         ${card("users", "Conta na hora", "Quem entra com o Google pela primeira vez ganha uma conta gratuita na hora, sem formulário.")}
         ${card("cloud", "Relatórios por conta", "Cada pessoa vê e edita só os próprios relatórios, de qualquer computador.")}
         ${card("filter", "Bloqueio imediato", "Tirar o acesso de alguém derruba a sessão dela no pedido seguinte, mesmo com o app aberto.")}
-        ${card("model", "Papéis", "Gratuito, usuário e administrador: administradores gerenciam as pessoas; os demais trabalham nos próprios relatórios.")}
+        ${card("model", "Planos e papéis", "Cada conta tem um plano (do Gratuito ao Avançado); administradores gerenciam as pessoas e os planos.")}
         ${card("share", "Publicação controlada", "Só quem publica decide o que vai no HTML de leitura; o resto continua protegido pelo login.")}
       </div>
     </div>
@@ -354,6 +366,70 @@ const PAGES: Record<string, Page> = {
   ${cta("Pronto para entrar?", "Use a sua conta Google: a sua conta gratuita é criada na hora.")}`,
   },
 
+  "/planos": {
+    title: "Planos · Bahanle Analytics",
+    description: "Gratuito, Iniciante, Intermediário e Avançado: os visuais de cada plano e os preços.",
+    body: () => `
+  ${pageHero("Planos", "Escolha o plano do tamanho da sua análise", "Comece grátis e libere mais visuais quando precisar. Os planos são acumulativos: cada um traz tudo o que o anterior tem.")}
+  <section>
+    <div class="wrap">
+      <div class="plans">
+        ${PLANS.map((p, i) => `<article class="plan p-${p.id}${i === PLANS.length - 1 ? " top" : ""}">
+          ${i === PLANS.length - 1 ? '<span class="plan-flag">Completo</span>' : ""}
+          <h3>${p.name}</h3>
+          <div class="price">${priceTag(p.price)}</div>
+          <p class="tag">${p.tagline}</p>
+          <div class="count"><b>${visualsOf(p.id).length}</b> de ${VISUAL_COUNT} visuais</div>
+          <a class="btn ${i === 0 ? "primary" : ""}" href="#topo" data-login>${i === 0 ? "Começar grátis" : "Entrar com Google"}</a>
+          <div class="includes">
+            <span>${i === 0 ? "Visuais incluídos" : "Tudo do " + PLANS[i - 1].name + ", mais"}</span>
+            <ul>${p.adds.map((t) => `<li>${VISUAL_NAME.get(t) ?? t}</li>`).join("")}</ul>
+          </div>
+        </article>`).join("")}
+      </div>
+      <p class="plans-note">Valores mensais. Por enquanto, a mudança de plano é feita por um administrador; o pagamento pelo próprio site chega em breve.</p>
+    </div>
+  </section>
+  <section class="alt">
+    <div class="wrap">
+      ${head("Em todos os planos", "O que todo mundo tem", "Os planos mudam os visuais disponíveis; o resto da ferramenta é igual para todos.", true)}
+      <div class="grid">
+        ${card("upload", "Dados e preparo", "Importação de CSV, Excel e JSON e editor de consultas com etapas aplicadas.")}
+        ${card("formula", "Modelo e fórmulas", "Relacionamentos, colunas calculadas, medidas e inteligência de tempo.")}
+        ${card("explore", "Exploração", "Filtro cruzado, drill-down, drill-through e painel de filtros.")}
+        ${card("cloud", "Salvo na sua conta", "Relatórios na nuvem com salvamento automático.")}
+        ${card("share", "Publicação", "PNG, PDF e HTML de leitura, com layout para celular.")}
+        ${card("spark", "Assistente de IA", "Monta painéis com os visuais do seu plano.")}
+      </div>
+    </div>
+  </section>
+  <section>
+    <div class="wrap">
+      ${head("Comparação", "Todos os visuais, plano a plano", "✓ indica a partir de qual plano o visual fica disponível.", true)}
+      <div class="compare-wrap">
+        <table class="compare">
+          <thead><tr><th>Visual</th>${PLANS.map((p) => `<th>${p.name}<small>${p.price ? formatPrice(p.price) : "Grátis"}</small></th>`).join("")}</tr></thead>
+          ${VISUAL_GROUPS.map((g) => `<tbody><tr class="group"><th colspan="${PLANS.length + 1}">${g.name}</th></tr>
+            ${g.items.map((v) => {
+              const from = PLANS.indexOf(planOfVisual(v.id as VisualType));
+              return `<tr><td><a href="/visuais#v-${v.id}">${v.name}</a></td>${PLANS.map((_, i) => `<td>${i >= from ? '<span class="yes" aria-label="incluído">✓</span>' : '<span class="no" aria-label="não incluído">—</span>'}</td>`).join("")}</tr>`;
+            }).join("")}</tbody>`).join("")}
+        </table>
+      </div>
+    </div>
+  </section>
+  <section class="alt">
+    <div class="wrap">
+      <div class="faq">
+        <details open><summary>Posso começar sem pagar?</summary><p>Sim. Toda conta nova começa no plano Gratuito, com 9 visuais e todos os outros recursos da ferramenta.</p></details>
+        <details><summary>O que acontece com um relatório que usa visuais de outro plano?</summary><p>Ele continua abrindo e funcionando normalmente. Só não dá para adicionar novos visuais fora do seu plano — eles aparecem com um cadeado no editor.</p></details>
+        <details><summary>Como mudo de plano?</summary><p>Por enquanto, um administrador muda o plano da sua conta. A troca vale na hora, sem precisar sair e entrar de novo.</p></details>
+      </div>
+    </div>
+  </section>
+  ${cta("Comece pelo plano Gratuito", "Entre com a sua conta Google: a sua conta é criada na hora.")}`,
+  },
+
   "/duvidas": {
     title: "Dúvidas · Bahanle Analytics",
     description: "Perguntas frequentes sobre instalação, arquivos, celular, IA, compartilhamento e acesso.",
@@ -368,7 +444,7 @@ const PAGES: Record<string, Page> = {
   },
 };
 
-const NAV: [string, string][] = [["/", "Início"], ["/recursos", "Recursos"], ["/visuais", "Visuais"], ["/ia", "IA"], ["/seguranca", "Segurança"], ["/duvidas", "Dúvidas"]];
+const NAV: [string, string][] = [["/", "Início"], ["/recursos", "Recursos"], ["/visuais", "Visuais"], ["/ia", "IA"], ["/planos", "Planos"], ["/seguranca", "Segurança"], ["/duvidas", "Dúvidas"]];
 
 /** Endereços que o site atende. */
 export const SITE_PATHS = new Set(Object.keys(PAGES));
@@ -390,7 +466,7 @@ export function sitePage(path: string, ctx: SiteContext): string {
        Preencha o <code>.env</code> (veja <code>.env.example</code>) e reinicie o servidor.</div>`
     : `<div id="msg" class="banner" role="alert" hidden></div>`;
   // Quem já entrou: os botões "Entrar" do meio da página levam direto ao app.
-  const body = signedIn ? page.body().replace(/href="#topo" data-login>Entrar com Google/g, 'href="/">Abrir meus relatórios') : page.body();
+  const body = signedIn ? page.body().replace(/href="#topo" data-login>[^<]*/g, 'href="/">Abrir meus relatórios') : page.body();
 
   return `<!doctype html>
 <html lang="pt-BR">
@@ -583,6 +659,35 @@ const CSS = `
   .mini text { font-family: inherit; } .mini .big { fill: var(--text); font-weight: 700; } .mini .num { fill: var(--text); font-weight: 700; }
   .mini .small { fill: var(--muted); } .mini .up { fill: #2e9d47; font-weight: 700; } .mini .inv { fill: #fff; font-weight: 600; }
 
+  /* Planos */
+  .plans { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; align-items: start; }
+  .plan { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 24px; display: flex; flex-direction: column; gap: 10px; }
+  .plan.top { border: 2px solid var(--red); box-shadow: var(--shadow); }
+  .plan-flag { position: absolute; top: -12px; left: 24px; padding: 3px 12px; border-radius: 999px; background: var(--red); color: #fff; font-size: 12px; font-weight: 700; }
+  .plan h3 { font-size: 20px; }
+  .plan .price b { font-size: 34px; letter-spacing: -.02em; } .plan .price span { color: var(--muted); margin-left: 2px; }
+  .plan .tag { margin: 0; color: var(--muted); font-size: 14.5px; min-height: 3em; }
+  .plan .count { font-size: 14px; } .plan .count b { color: var(--red); font-size: 18px; }
+  .plan .btn { justify-content: center; }
+  .includes { border-top: 1px solid var(--line); padding-top: 12px; font-size: 14px; }
+  .includes > span { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--yellow-ink); margin-bottom: 6px; }
+  .includes ul { margin: 0; padding-left: 18px; color: var(--muted); display: grid; gap: 2px; }
+  .plans-note { text-align: center; color: var(--muted); font-size: 14px; margin: 24px 0 0; }
+  .plan-badge { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+  .plan-badge.p-free { background: var(--neutral); color: var(--text); }
+  .plan-badge.p-iniciante { background: var(--yellow-soft); color: var(--yellow-ink); }
+  .plan-badge.p-intermediario { background: var(--red-soft); color: var(--red-dark); }
+  .plan-badge.p-avancado { background: var(--red); color: #fff; }
+  .compare-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--card); }
+  .compare { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 620px; }
+  .compare th, .compare td { padding: 10px 14px; text-align: center; border-bottom: 1px solid var(--line); }
+  .compare th:first-child, .compare td:first-child { text-align: left; }
+  .compare thead th { position: sticky; top: 0; background: var(--card); font-size: 15px; }
+  .compare thead small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
+  .compare tr.group th { background: var(--bg2); text-align: left; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--red); }
+  .compare td a { text-decoration: none; } .compare td a:hover { color: var(--red); }
+  .compare .yes { color: var(--red); font-weight: 800; } .compare .no { color: var(--line); }
+
   .faq { max-width: 780px; margin: 0 auto; display: grid; gap: 10px; }
   details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 4px 20px; }
   details[open] { border-color: color-mix(in srgb, var(--red) 40%, var(--line)); }
@@ -604,7 +709,7 @@ const CSS = `
   @media (prefers-reduced-motion: reduce) { .anim .reveal { opacity: 1; transform: none; } }
 
   @media (max-width: 1020px) {
-    .grid { grid-template-columns: repeat(2, 1fr); }
+    .grid, .plans { grid-template-columns: repeat(2, 1fr); }
     .steps, .steps.four { grid-template-columns: repeat(2, 1fr); }
     .hero-grid, .split { grid-template-columns: 1fr; gap: 40px; }
     .window { transform: none; }
@@ -622,7 +727,7 @@ const CSS = `
     .g_id_signin.compact { display: block; }
     .hero { padding: 40px 0 56px; } .page-hero { padding: 44px 0 36px; }
     .hero::before { inset: -20% -50% auto auto; width: 140%; height: 70%; opacity: .6; }
-    .grid, .steps, .steps.four { grid-template-columns: 1fr; }
+    .grid, .steps, .steps.four, .plans { grid-template-columns: 1fr; }
     .vcard { grid-template-columns: 1fr; } .vart { max-width: 240px; }
     .subnav .wrap { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
     .kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } .kpi b { font-size: 14px; }

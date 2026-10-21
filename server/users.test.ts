@@ -16,10 +16,10 @@ const config = configFromEnv({
 const p = (email: string) => ({ email, name: email.split("@")[0] });
 
 describe("sem banco", () => {
-  it("todo mundo entra: admin do .env, user por ALLOWED_EMAILS, free para o resto", async () => {
+  it("todo mundo entra: admin do .env, avançado por ALLOWED_EMAILS, free para o resto", async () => {
     const policy = envPolicy(config);
     expect(await policy.login(p("Chefe@gmail.com"))).toEqual({ ok: true, role: "admin" });
-    expect(await policy.login(p("caio@empresa.com"))).toEqual({ ok: true, role: "user" });
+    expect(await policy.login(p("caio@empresa.com"))).toEqual({ ok: true, role: "avancado" });
     expect(await policy.login(p("qualquer@gmail.com"))).toEqual({ ok: true, role: "free" });
   });
 });
@@ -54,9 +54,9 @@ describe.skipIf(!DB)("usuários (Postgres)", () => {
     expect(row).toEqual({ role: "free", status: "active" });
 
     // O papel dado por um administrador fica: o próximo login não volta para free.
-    await policy.q("UPDATE users SET role = 'user' WHERE email = 'bia@gmail.com'");
+    await policy.q("UPDATE users SET role = 'iniciante' WHERE email = 'bia@gmail.com'");
     policy.forget("bia@gmail.com");
-    expect(await policy.login(p("bia@gmail.com"))).toEqual({ ok: true, role: "user" });
+    expect(await policy.login(p("bia@gmail.com"))).toEqual({ ok: true, role: "iniciante" });
   });
 
   it("bloqueado não entra nem continua a sessão; desbloqueado volta com o mesmo papel", async () => {
@@ -72,14 +72,14 @@ describe.skipIf(!DB)("usuários (Postgres)", () => {
     expect(await policy.login(p("bia@gmail.com"))).toEqual({ ok: true, role: "free" });
   });
 
-  it("domínio de ALLOWED_EMAILS entra como user, mas o bloqueio no banco vale mais", async () => {
-    expect(await policy.login(p("caio@empresa.com"))).toEqual({ ok: true, role: "user" });
+  it("domínio de ALLOWED_EMAILS entra no avançado, mas o bloqueio no banco vale mais", async () => {
+    expect(await policy.login(p("caio@empresa.com"))).toEqual({ ok: true, role: "avancado" });
     await policy.q("UPDATE users SET status = 'blocked' WHERE email = 'caio@empresa.com'");
     policy.forget("caio@empresa.com");
     expect(await policy.check("caio@empresa.com")).toBeNull();
   });
 
-  it("migra o banco antigo: papel free permitido e pedidos pendentes ativados como free", async () => {
+  it("migra o banco antigo: user vira avançado, planos permitidos e pendentes ativados como free", async () => {
     await pool.query("DROP TABLE users");
     await pool.query(`CREATE TABLE users (
       email text PRIMARY KEY, name text NOT NULL DEFAULT '', picture text,
@@ -94,7 +94,7 @@ describe.skipIf(!DB)("usuários (Postgres)", () => {
     const rows = (await fresh.q("SELECT email, role, status FROM users ORDER BY email")).rows;
     expect(rows).toEqual([
       { email: "antigo@gmail.com", role: "free", status: "active" },
-      { email: "velho@gmail.com", role: "user", status: "active" },
+      { email: "velho@gmail.com", role: "avancado", status: "active" },
     ]);
     // Os padrões novos valem para inserções sem papel nem situação.
     await fresh.q("INSERT INTO users (email) VALUES ('padrao@gmail.com')");
@@ -128,8 +128,9 @@ describe.skipIf(!DB)("usuários (Postgres)", () => {
     expect(await added.json()).toMatchObject({ email: "davi@gmail.com", role: "free", status: "active" });
     expect(await (await api("/api/admin/users", admin, "POST", { email: "eva@gmail.com", role: "admin" })).json()).toMatchObject({ role: "admin" });
 
-    expect(await (await api("/api/admin/users/bia@gmail.com", admin, "PATCH", { role: "user" })).json()).toMatchObject({ role: "user" });
-    expect(await policy.check("bia@gmail.com")).toBe("user");
+    expect(await (await api("/api/admin/users/bia@gmail.com", admin, "PATCH", { role: "intermediario" })).json()).toMatchObject({ role: "intermediario" });
+    expect(await policy.check("bia@gmail.com")).toBe("intermediario");
+    expect((await api("/api/admin/users/bia@gmail.com", admin, "PATCH", { role: "user" })).status).toBe(400); // papel antigo
     expect(await (await api("/api/admin/users/bia@gmail.com", admin, "PATCH", { role: "free" })).json()).toMatchObject({ role: "free" });
 
     expect((await api("/api/admin/users/bia%40gmail.com", admin, "PATCH", { status: "blocked" })).status).toBe(200);
@@ -142,12 +143,12 @@ describe.skipIf(!DB)("usuários (Postgres)", () => {
   it("protege contra erros e quem não é administrador", async () => {
     const api = await start();
     await policy.login(p("bia@empresa.com"));
-    expect((await api("/api/admin/users", "bia@empresa.com:user")).status).toBe(403);
+    expect((await api("/api/admin/users", "bia@empresa.com:avancado")).status).toBe(403);
     expect((await api("/api/admin/users", "zeca@gmail.com:free")).status).toBe(403);
     expect((await api("/api/admin/users", "")).status).toBe(401);
     const admin = "davi@gmail.com:admin";
     expect((await api("/api/admin/users/davi@gmail.com", admin, "PATCH", { status: "blocked" })).status).toBe(400);
-    expect((await api("/api/admin/users/chefe@gmail.com", admin, "PATCH", { role: "user" })).status).toBe(400);
+    expect((await api("/api/admin/users/chefe@gmail.com", admin, "PATCH", { role: "iniciante" })).status).toBe(400);
     expect((await api("/api/admin/users/bia@empresa.com", admin, "PATCH", { role: "dono" })).status).toBe(400);
     expect((await api("/api/admin/users", admin, "POST", { email: "x@gmail.com", role: "dono" })).status).toBe(400);
     expect((await api("/api/admin/users", admin, "POST", { email: "sem-arroba" })).status).toBe(400);

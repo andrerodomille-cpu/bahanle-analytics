@@ -12,6 +12,8 @@ import { formatMeasure, formatValue } from "../model/format";
 import { evaluateColumn } from "../model/calculated";
 import { MEASURE_SLOTS, USES_LEGEND } from "./VisualView";
 import { FiltersPane } from "./FiltersPane";
+import { usePlan } from "../model/planContext";
+import { formatPrice } from "../model/plans";
 
 export const VISUAL_TYPES: { type: VisualType; label: string; icon: string }[] = [
   { type: "bar", label: "Colunas", icon: "▮▮" },
@@ -103,6 +105,8 @@ export function FieldsPane({ report, dispatch, onAddVisual, onEditMeasure, onEdi
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const plan = usePlan();
+  const [lockedMsg, setLockedMsg] = useState<string | null>(null);
 
   const importFiles = async (files: FileList | null) => {
     setError(null);
@@ -120,13 +124,25 @@ export function FieldsPane({ report, dispatch, onAddVisual, onEditMeasure, onEdi
     <aside className="pane left">
       <h3>Visualizações</h3>
       <div className="viz-grid">
-        {VISUAL_TYPES.map((v) => (
-          <button key={v.type} title={v.label} onClick={() => onAddVisual(v.type)}>
-            <span className="viz-icon">{v.icon}</span>
-            <span>{v.label}</span>
-          </button>
-        ))}
+        {VISUAL_TYPES.map((v) => {
+          const locked = !plan.allowed.has(v.type);
+          const needs = plan.requiredFor(v.type);
+          return (
+            <button key={v.type} className={locked ? "locked" : ""}
+              title={locked ? `${v.label}: disponível no plano ${needs.name}` : v.label}
+              onClick={() => (locked ? setLockedMsg(`${v.label} faz parte do plano ${needs.name} (${formatPrice(needs.price)}/mês).`) : onAddVisual(v.type))}>
+              <span className="viz-icon">{locked ? "🔒" : v.icon}</span>
+              <span>{v.label}</span>
+            </button>
+          );
+        })}
       </div>
+      {lockedMsg && (
+        <div className="locked-msg small">
+          {lockedMsg} <a href="/planos" target="_blank" rel="noopener">Ver planos</a>
+          <button className="link" title="Fechar" onClick={() => setLockedMsg(null)}>✕</button>
+        </div>
+      )}
 
       <h3>Dados</h3>
       <div className="row-buttons">
@@ -267,7 +283,7 @@ function VisualProperties({ report, visual, dispatch }: {
   visual: Visual;
   dispatch: Dispatch<Action>;
 }) {
-
+  const plan = usePlan();
   const update = (patch: Partial<Visual>) => dispatch({ type: "updateVisual", id: visual.id, patch });
   const slots = MEASURE_SLOTS[visual.type];
   const single = slots?.length === 1;
@@ -296,9 +312,15 @@ function VisualProperties({ report, visual, dispatch }: {
             update({ type, measureIds: visual.measureIds.slice(0, max) });
           }}
         >
-          {VISUAL_TYPES.map((v) => (
-            <option key={v.type} value={v.type}>{v.label}</option>
-          ))}
+          {/* Trocar para um tipo fora do plano não vale; o tipo atual fica sempre na lista. */}
+          {VISUAL_TYPES.map((v) => {
+            const locked = !plan.allowed.has(v.type) && v.type !== visual.type;
+            return (
+              <option key={v.type} value={v.type} disabled={locked}>
+                {locked ? `🔒 ${v.label} (plano ${plan.requiredFor(v.type).name})` : v.label}
+              </option>
+            );
+          })}
         </select>
       </label>
 

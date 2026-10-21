@@ -3,6 +3,7 @@ import type { Dispatch } from "react";
 import type { Report } from "../model/types";
 import type { Action } from "../model/store";
 import { DEFAULT_OLLAMA_URL, generateDashboard, listModels } from "../model/ai";
+import { usePlan } from "../model/planContext";
 
 const CONFIG_KEY = "mini-bi-ollama";
 
@@ -47,6 +48,7 @@ export function AiAssistant({ report, pageId, dispatch, onGoToPage, onClose }: {
   onClose: () => void;
 }) {
   const [config, setConfig] = useState(loadConfig);
+  const plan = usePlan();
   const [models, setModels] = useState<string[] | null>(null);
   const [connError, setConnError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -100,6 +102,7 @@ export function AiAssistant({ report, pageId, dispatch, onGoToPage, onClose }: {
       const r = await generateDashboard(report, request, config, {
         newPage,
         pageId,
+        allowed: plan.allowed,
         signal: ctrl.signal,
         onStatus: setStatus,
       });

@@ -87,10 +87,10 @@ describe("middleware", () => {
     expect(out.headers.get("set-cookie")).toContain("Max-Age=0");
   });
 
-  it("o papel é conferido a cada pedido (sai de ALLOWED_EMAILS: vira free)", async () => {
+  it("o papel é conferido a cada pedido (sai de ALLOWED_EMAILS: volta para free)", async () => {
     const session = `minibi_session=${createSession({ email: "ana@gmail.com", name: "Ana" }, config)}`;
     let url = await start(google({}));
-    expect(await (await fetch(url + "/api/auth/me", { headers: { cookie: session } })).json()).toMatchObject({ role: "user" });
+    expect(await (await fetch(url + "/api/auth/me", { headers: { cookie: session } })).json()).toMatchObject({ role: "avancado" });
     server!.close();
     url = await start(google({}), { ...config, allowed: ["@empresa.com"] });
     expect(await (await fetch(url + "/api/auth/me", { headers: { cookie: session } })).json()).toMatchObject({ role: "free" });
@@ -148,7 +148,7 @@ describe("site público", () => {
   it("cada página tem endereço próprio e o login no topo", async () => {
     const url = await start();
     for (const [path, text] of [["/", "Seus dados viram"], ["/recursos", "Tudo o que um time de dados precisa"],
-      ["/visuais", "Quando usar"], ["/ia", "Peça o painel em português"], ["/seguranca", "Cada pessoa no seu lugar"], ["/duvidas", "Perguntas e respostas"]]) {
+      ["/visuais", "Quando usar"], ["/ia", "Peça o painel em português"], ["/planos", "Escolha o plano do tamanho da sua análise"], ["/seguranca", "Cada pessoa no seu lugar"], ["/duvidas", "Perguntas e respostas"]]) {
       const page = await (await fetch(url + path, { headers: html })).text();
       expect(page).toContain(text);
       expect(page).toContain(`data-client_id="${config.clientId}"`);

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { sampleReport } from "./sampleData";
 import { reducer } from "./store";
-import { describeModel, generateDashboard, layout, PAGE_WIDTH, planToActions, resolveField } from "./ai";
+import { describeModel, generateDashboard, layout, PAGE_WIDTH, planToActions, resolveField, systemPrompt } from "./ai";
 import type { Plan } from "./ai";
 
 const report = sampleReport();
@@ -117,5 +117,23 @@ describe("generateDashboard", () => {
     expect(d).toContain("UF (text)");
     expect(d).toContain("Vendas[LojaID] → Lojas[LojaID]");
     expect(d).toContain("Faturamento = SUM(Vendas[Valor])");
+  });
+});
+
+describe("plano da conta", () => {
+  it("a IA só usa visuais do plano: o prompt lista só eles e o resto é recusado", () => {
+    const allowed = new Set<import("./types").VisualType>(["bar", "card", "table"]);
+    const prompt = systemPrompt(report, allowed);
+    expect(prompt).toContain("    bar:");
+    expect(prompt).not.toContain("    map:");
+    const r = planToActions(report, {
+      reply: "ok",
+      visuals: [
+        { type: "map", title: "Mapa", axis: "Lojas[UF]", measures: ["Faturamento"] },
+        { type: "bar", title: "Colunas", axis: "Lojas[UF]", measures: ["Faturamento"] },
+      ],
+    }, { newPage: false, pageId: page, allowed });
+    expect(r.visualCount).toBe(1);
+    expect(r.problems[0]).toContain("não faz parte do plano");
   });
 });

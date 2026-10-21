@@ -1,23 +1,25 @@
 // Quem pode entrar: qualquer conta Google. No primeiro login a pessoa é
-// cadastrada na hora, ativa, com o papel "free". Administradores vêm do .env
-// (ADMIN_EMAILS) ou da tela Usuários, onde também se bloqueia alguém e se
-// troca o papel (admin, user ou free).
+// cadastrada na hora, ativa, no plano "free". O papel de cada conta é o plano
+// dela (free, iniciante, intermediario ou avancado — ver src/model/plans.ts)
+// ou "admin". Administradores vêm do .env (ADMIN_EMAILS) ou da tela Usuários,
+// onde também se troca o plano e se bloqueia alguém.
 //
 // Sem banco, vale o mesmo, mas nada fica guardado: ADMIN_EMAILS são
-// administradores, ALLOWED_EMAILS são "user" e o resto entra como "free".
+// administradores, ALLOWED_EMAILS entram no plano avançado e o resto no free.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { AuthConfig, AuthedRequest } from "./auth.ts";
 import { isAllowed } from "./auth.ts";
 import { withSchema, type Pool } from "./db.ts";
 import { HttpError, json, readJson, type Next } from "./http.ts";
+import { PLAN_IDS, type PlanId } from "../src/model/plans.ts";
 
-/** "free" é o papel de quem se cadastra sozinho; "user" e "admin" são dados por um administrador. */
-export type Role = "admin" | "user" | "free";
+/** O plano da conta ou "admin". "free" é o de quem se cadastra sozinho. */
+export type Role = "admin" | PlanId;
 /** "pending" só existe em cadastros antigos (antes do cadastro aberto); a migração os ativa. */
 export type UserStatus = "active" | "pending" | "blocked";
 
-export const ROLES: Role[] = ["admin", "user", "free"];
+export const ROLES: Role[] = ["admin", ...PLAN_IDS];
 export const DEFAULT_ROLE: Role = "free";
 
 export interface Profile {
@@ -42,9 +44,9 @@ export interface AccessPolicy {
 const lower = (e: string) => e.trim().toLowerCase();
 const BLOCKED = "Seu acesso ao Bahanle Analytics foi bloqueado.";
 
-/** Papel de quem não está no banco: admin do .env, "user" por ALLOWED_EMAILS ou "free". */
+/** Papel de quem não está no banco: admin do .env, avançado por ALLOWED_EMAILS ou "free". */
 const envRole = (email: string, c: AuthConfig): Role =>
-  c.admins.includes(lower(email)) ? "admin" : isAllowed(email, c.allowed) ? "user" : DEFAULT_ROLE;
+  c.admins.includes(lower(email)) ? "admin" : isAllowed(email, c.allowed) ? "avancado" : DEFAULT_ROLE;
 
 /** Só o .env (sem banco): todo mundo entra; nada fica guardado. */
 export function envPolicy(c: AuthConfig): AccessPolicy {
@@ -61,22 +63,24 @@ export function envPolicy(c: AuthConfig): AccessPolicy {
 // ---------------- Banco ----------------
 
 /**
- * Tabela e migrações (idempotentes, rodam na primeira consulta): o papel
- * "free" entra na lista permitida e vira o padrão, o padrão da situação passa
- * a ser "active" e os pedidos antigos ainda pendentes são ativados como "free".
+ * Tabela e migrações (idempotentes, rodam na primeira consulta): os papéis
+ * passam a ser os planos e "admin"; quem era "user" vai para o avançado (antes
+ * de recriar a regra, que recusaria o papel antigo); o padrão é "free" e
+ * "active"; pedidos antigos ainda pendentes viram contas ativas "free".
  */
 export const USERS_SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   email         text        PRIMARY KEY,
   name          text        NOT NULL DEFAULT '',
   picture       text,
-  role          text        NOT NULL DEFAULT 'free'   CHECK (role IN ('admin', 'user', 'free')),
+  role          text        NOT NULL DEFAULT 'free'   CHECK (role IN ('admin', 'free', 'iniciante', 'intermediario', 'avancado')),
   status        text        NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'blocked')),
   created_at    timestamptz NOT NULL DEFAULT now(),
   last_login_at timestamptz
 );
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'user', 'free'));
+UPDATE users SET role = 'avancado' WHERE role = 'user';
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'free', 'iniciante', 'intermediario', 'avancado'));
 ALTER TABLE users ALTER COLUMN role SET DEFAULT 'free';
 ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';
 UPDATE users SET status = 'active', role = 'free' WHERE status = 'pending';
@@ -177,7 +181,7 @@ const info = (r: UserRow, c: AuthConfig): UserInfo => ({
 });
 
 /**
- * /api/admin/users          GET lista · POST cadastra {email, role} (padrão "free")
+ * /api/admin/users          GET lista · POST cadastra {email, role} (padrão "free"; role = plano ou "admin")
  * /api/admin/users/:email   PATCH {role?, status?} · DELETE remove
  * Só administradores. Ninguém muda o próprio acesso nem os administradores do .env.
  */

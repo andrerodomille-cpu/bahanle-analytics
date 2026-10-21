@@ -1,10 +1,12 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { ButtonAction, Column, Measure, PaletteName, Report, Value, ValueRange, Visual, VisualType } from "./model/types";
 import { fieldKey, fieldLabel, newId } from "./model/types";
 import { captureBookmark, emptyReport, historyReducer, loadReport, migrate, saveReport } from "./model/store";
 import { sampleReport } from "./model/sampleData";
 import { formatValue } from "./model/format";
 import { PALETTES, PaletteContext } from "./model/theme";
+import { PlanContext, planAccess } from "./model/planContext";
+import { planById, type PlanId } from "./model/plans";
 import { exportPagePng, printPage, publishReport } from "./model/publish";
 import { Canvas } from "./components/Canvas";
 import { ColumnEditor, FieldsPane, MeasureEditor, PropertiesPane, VISUAL_TYPES } from "./components/Panels";
@@ -27,7 +29,8 @@ export interface Account {
   email: string;
   name: string;
   picture?: string;
-  role?: "admin" | "user" | "free";
+  /** O plano da conta (free, iniciante, intermediario, avancado) ou "admin". */
+  role?: "admin" | PlanId;
 }
 
 /** Texto de um filtro por intervalo: "entre 10 e 20", "≥ 10", "≤ 20". */
@@ -449,12 +452,18 @@ Sobrescrever com a versão desta tela?`)) return;
   const pageVisualIds = new Set(report.visuals.filter((v) => v.pageId === page.id).map((v) => v.id));
   const pageFilters = report.filters.filter((f) => pageVisualIds.has(f.sourceVisualId));
   const palette = PALETTES[report.theme.palette] ?? PALETTES.padrao;
+  // Visuais liberados pelo plano da conta (sem conta: todos).
+  const plan = useMemo(() => planAccess(user ? user.role ?? "free" : "admin"), [user]);
 
   const userMenu = user && (
     <Menu label={user.name.split(" ")[0]} align="right">
       <div className="menu-note user-card">
         {user.picture && <img src={user.picture} alt="" referrerPolicy="no-referrer" />}
         <span><strong>{user.name}</strong><br />{user.email}</span>
+      </div>
+      <div className="menu-note user-plan">
+        {user.role === "admin" ? "Administrador · todos os visuais" : `Plano ${planById(user.role)?.name ?? "Gratuito"} · ${plan.allowed.size} de 45 visuais`}
+        <a href="/planos" target="_blank" rel="noopener">Ver planos</a>
       </div>
       <div className="menu-sep" />
       {view === "editor" && <button className="menu-item" onClick={() => setView("home")}>⌂ Meus relatórios</button>}
@@ -465,6 +474,7 @@ Sobrescrever com a versão desta tela?`)) return;
 
   return (
     <PaletteContext.Provider value={palette.colors}>
+    <PlanContext.Provider value={plan}>
       <div className={"app" + (viewOnly ? " view-only" : "")} data-theme={report.theme.mode}>
         {view === "home" && user && (
           <>
@@ -825,6 +835,7 @@ Sobrescrever com a versão desta tela?`)) return;
           <MeasureEditor report={report} measure={editing} dispatch={dispatch} onClose={() => setEditing(undefined)} />
         )}
       </div>
+    </PlanContext.Provider>
     </PaletteContext.Provider>
   );
 }

@@ -149,6 +149,21 @@ export const PLAN_SCHEMA = {
   required: ["reply", "pageName", "measures", "visuals"],
 } as const;
 
+/** O mesmo formato, com a lista de tipos de visual restrita ao plano da conta. */
+export function planSchema(types: VisualType[]) {
+  const items = PLAN_SCHEMA.properties.visuals.items;
+  return {
+    ...PLAN_SCHEMA,
+    properties: {
+      ...PLAN_SCHEMA.properties,
+      visuals: { ...PLAN_SCHEMA.properties.visuals, items: { ...items, properties: { ...items.properties, type: { type: "string", enum: types } } } },
+    },
+  };
+}
+
+/** Tipos que a IA pode usar: os que ela conhece, dentro do plano da conta. */
+const typesFor = (allowed?: Set<VisualType>) => PLAN_TYPES.filter((t) => !allowed || allowed.has(t));
+
 // ---------------- Contexto: o que o LLM sabe do modelo ----------------
 
 /** Até `n` valores distintos de uma coluna de texto (ajuda a escrever filtros como Lojas[Região] = "Sul"). */
@@ -183,7 +198,7 @@ export function describeModel(report: Pick<Report, "tables" | "relationships" | 
   return lines.join("\n");
 }
 
-export function systemPrompt(report: Pick<Report, "tables" | "relationships" | "measures">): string {
+export function systemPrompt(report: Pick<Report, "tables" | "relationships" | "measures">, allowed?: Set<VisualType>): string {
   return `Você é o assistente de um sistema de BI (Bahanle Analytics). O usuário pede um dashboard em português e você responde SOMENTE com um plano em JSON.
 
 ${describeModel(report)}
@@ -191,14 +206,14 @@ ${describeModel(report)}
 COMO RESPONDER:
 - "reply": uma ou duas frases em português dizendo o que você montou.
 - "pageName": nome curto para a página do dashboard.
-- "measures": medidas NOVAS necessárias (não repita as que já existem). Expressões em mini-DAX:
+- "measures": medidas NOVAS necessárias (não repita as que já existem). Expressões na linguagem de fórmulas:
   SUM, AVERAGE, MIN, MAX, COUNT, DISTINCTCOUNT recebem Tabela[Coluna]; COUNTROWS(Tabela); DIVIDE(a, b);
   IF(cond, a, b); outra medida com [Nome]; CALCULATE(expr, Tabela[Coluna] = "valor") ou ALL(Tabela);
   SUMX(Tabela, expressão por linha). Tabelas com espaço: 'Minha Tabela'[Coluna].
   format: "currency" para dinheiro, "percent" para percentuais, "number" para o resto.
 - "visuals": de 1 a 8 visuais. Cada um tem:
   type: um destes tipos —
-${PLAN_TYPES.map((t) => `    ${t}: ${AI_VISUALS[t]}`).join("\n")}
+${typesFor(allowed).map((t) => `    ${t}: ${AI_VISUALS[t]}`).join("\n")}
   title: título curto em português.
   axis: a coluna da categoria no formato Tabela[Coluna] ("" quando o tipo não usa eixo).
   datePart: se o eixo for uma coluna do tipo date, a parte: year, quarter, month ou day; senão "".
@@ -221,12 +236,12 @@ export interface ChatMessage {
   content: string;
 }
 
-async function askPlan(config: OllamaConfig, messages: ChatMessage[], signal?: AbortSignal): Promise<{ plan: Plan; raw: string }> {
+async function askPlan(config: OllamaConfig, messages: ChatMessage[], signal?: AbortSignal, allowed?: Set<VisualType>): Promise<{ plan: Plan; raw: string }> {
   const r = await call<{ message?: { content?: string } }>(config.url, "/api/chat", {
     model: config.model,
     messages,
     stream: false,
-    format: PLAN_SCHEMA,
+    format: allowed ? planSchema(typesFor(allowed)) : PLAN_SCHEMA,
     options: { temperature: 0.2 },
   }, signal);
   const raw = r.message?.content ?? "";
@@ -323,7 +338,12 @@ export interface Applied {
  * Valida o plano contra o modelo e gera as ações (medidas, página, visuais).
  * Função pura: não toca no relatório, só diz o que despachar.
  */
-export function planToActions(report: Report, plan: Plan, opts: { newPage: boolean; pageId: string }): Applied {
+export function planToActions(report: Report, plan: Plan, opts: {
+  newPage: boolean;
+  pageId: string;
+  /** Visuais do plano da conta (sem a lista, todos valem). */
+  allowed?: Set<VisualType>;
+}): Applied {
   const actions: Action[] = [];
   const notes: string[] = [];
   const problems: string[] = [];
@@ -376,6 +396,10 @@ export function planToActions(report: Report, plan: Plan, opts: { newPage: boole
     const label = pv.title?.trim() || pv.type;
     if (!PLAN_TYPES.includes(type)) {
       problems.push(`Visual "${label}": tipo "${pv.type}" não existe.`);
+      continue;
+    }
+    if (opts.allowed && !opts.allowed.has(type)) {
+      problems.push(`Visual "${label}": o tipo "${pv.type}" não faz parte do plano desta conta; use outro tipo.`);
       continue;
     }
     const usesAxis = !["card", "multicard", "gauge"].includes(type);
@@ -440,14 +464,14 @@ export async function generateDashboard(
   report: Report,
   request: string,
   config: OllamaConfig,
-  opts: { newPage: boolean; pageId: string; signal?: AbortSignal; onStatus?: (s: string) => void },
+  opts: { newPage: boolean; pageId: string; allowed?: Set<VisualType>; signal?: AbortSignal; onStatus?: (s: string) => void },
 ): Promise<GenerateResult> {
   const messages: ChatMessage[] = [
-    { role: "system", content: systemPrompt(report) },
+    { role: "system", content: systemPrompt(report, opts.allowed) },
     { role: "user", content: request },
   ];
   opts.onStatus?.("Pensando no dashboard");
-  let { plan, raw } = await askPlan(config, messages, opts.signal);
+  let { plan, raw } = await askPlan(config, messages, opts.signal, opts.allowed);
   let applied = planToActions(report, plan, opts);
   if (applied.problems.length) {
     opts.onStatus?.("Corrigindo o plano");
@@ -460,7 +484,7 @@ export async function generateDashboard(
       },
     );
     try {
-      const second = await askPlan(config, messages, opts.signal);
+      const second = await askPlan(config, messages, opts.signal, opts.allowed);
       const retry = planToActions(report, second.plan, opts);
       if (retry.visualCount > applied.visualCount ||
         (retry.visualCount === applied.visualCount && retry.problems.length < applied.problems.length)) {

@@ -1005,6 +1005,16 @@ button.big { padding: 10px 18px; font-size: 15px; font-weight: 600; border-radiu
 .users-counts b { margin-right: 3px; }
 .role-tag { font-weight: 600; }
 .role-tag.free { color: var(--brand-yellow-ink); }
-.role-tag.user { color: var(--text); }
+.role-tag.iniciante { color: var(--brand-yellow-ink); }
+.role-tag.intermediario, .role-tag.avancado { color: var(--brand-red); }
 .role-tag.admin { color: var(--brand-red); }
 .users-search { margin: 4px 0 10px; }
+
+/* Visuais fora do plano da conta: cadeado na paleta. */
+.viz-grid button.locked { opacity: 0.55; border-style: dashed; }
+.viz-grid button.locked:hover { opacity: 0.85; border-color: var(--brand-red); }
+.locked-msg { margin: 8px 0 4px; padding: 8px 10px; border-radius: 8px; background: var(--brand-yellow-soft); color: var(--text); line-height: 1.4; }
+.locked-msg a { color: var(--brand-red); font-weight: 600; }
+.locked-msg button.link { float: right; color: var(--muted); }
+.user-plan { display: flex; justify-content: space-between; gap: 12px; text-transform: none; letter-spacing: normal; font-size: 12px; white-space: nowrap; }
+.user-plan a { color: var(--brand-red); font-weight: 600; text-decoration: none; }

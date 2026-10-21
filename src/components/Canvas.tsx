@@ -18,6 +18,7 @@ import { downloadText, visualToCsv } from "../model/exportCsv";
 import { formatMeasure, formatValue } from "../model/format";
 import { measure } from "../model/perf";
 import { expandGroups, mobileOrder, movePatches } from "../engine/arrange";
+import { usePlan } from "../model/planContext";
 
 const GRID = 10;
 const snap = (n: number) => Math.max(0, Math.round(n / GRID) * GRID);
@@ -73,6 +74,7 @@ export function Canvas({
   report, pageId, dispatch, selectedIds, onSelectVisual, readOnly, onAction, onDrillthrough, engineEpoch = 0, renderTick = 0,
   mobile = false,
 }: Props) {
+  const plan = usePlan();
   // Um motor por versão do modelo: mover visuais ou filtrar reaproveita os caches.
   const { tables, relationships, measures } = report;
   // Parâmetros "e se" entram no motor; mudar um deles recria o motor (as medidas mudam).
@@ -119,7 +121,8 @@ export function Canvas({
     if (!DECORATIVE.includes(v.type) && !ANALYSIS.includes(v.type)) {
       list.push({ icon: "⭳", title: "Exportar dados (CSV)", run: () => exportVisual(engine, report, v) });
     }
-    if (!readOnly) {
+    // Duplicar só os visuais do plano da conta (o original continua editável).
+    if (!readOnly && plan.allowed.has(v.type)) {
       list.push({ icon: "⧉", title: "Duplicar visual", run: () => {
         const copy = { ...v, id: newId(), x: v.x + 20, y: v.y + 20, title: `${v.title} (cópia)`, groupId: undefined };
         dispatch({ type: "addVisual", visual: copy });

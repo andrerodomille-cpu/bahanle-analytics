@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { formatPrice, PLANS, type PlanId } from "../model/plans";
 
-type Role = "admin" | "user" | "free";
+/** O plano da conta ou "admin". */
+type Role = "admin" | PlanId;
 type Status = "active" | "pending" | "blocked";
 
 interface UserInfo {
@@ -25,9 +27,12 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
   return data as T;
 }
 
-/** Papéis na ordem em que aparecem nas listas; "free" é o de quem se cadastra sozinho. */
-const ROLES: [Role, string][] = [["free", "Gratuito (free)"], ["user", "Usuário (user)"], ["admin", "Administrador"]];
-const ROLE_LABEL: Record<Role, string> = { free: "gratuito", user: "usuário", admin: "administrador" };
+/** Planos (do gratuito ao avançado) e administrador; "free" é o de quem se cadastra sozinho. */
+const ROLES: [Role, string][] = [
+  ...PLANS.map((p): [Role, string] => [p.id, `${p.name} (${formatPrice(p.price)}${p.price ? "/mês" : ""})`]),
+  ["admin", "Administrador"],
+];
+const ROLE_LABEL: Record<Role, string> = { ...Object.fromEntries(PLANS.map((p) => [p.id, p.name])) as Record<PlanId, string>, admin: "administrador" };
 const fmtWhen = (iso?: string) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "nunca entrou");
 
 /** "Usuários" (só administradores): quem entrou, papel de cada pessoa e bloqueio. */
@@ -62,7 +67,7 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
   const patch = (u: UserInfo, body: Partial<Pick<UserInfo, "role" | "status">>) =>
     run("Salvando…", async () => replace(await call<UserInfo>(`/${encodeURIComponent(u.email)}`, "PATCH", body)));
   const remove = (u: UserInfo) => {
-    if (!confirm(`Remover ${u.email}? Os relatórios dele continuam no banco; se entrar de novo, é cadastrado outra vez como gratuito.`)) return;
+    if (!confirm(`Remover ${u.email}? Os relatórios dele continuam no banco; se entrar de novo, volta no plano Gratuito.`)) return;
     void run("Removendo…", async () => {
       await call(`/${encodeURIComponent(u.email)}`, "DELETE");
       setUsers((list) => list?.filter((x) => x.email !== u.email) ?? null);
@@ -79,7 +84,7 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
     return (users ?? []).filter((u) => !q || u.email.includes(q) || u.name.toLowerCase().includes(q));
   }, [users, search]);
   const counts = useMemo(() => {
-    const c = { free: 0, user: 0, admin: 0, blocked: 0 };
+    const c: Record<Role | "blocked", number> = { free: 0, iniciante: 0, intermediario: 0, avancado: 0, admin: 0, blocked: 0 };
     for (const u of users ?? []) {
       if (u.status === "blocked") c.blocked++;
       else c[u.role]++;
@@ -102,7 +107,7 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
         </span>
         {!locked && (
           <>
-            <select value={u.role} disabled={!!busy} title="Papel" onChange={(e) => void patch(u, { role: e.target.value as Role })}>
+            <select value={u.role} disabled={!!busy} title="Plano" onChange={(e) => void patch(u, { role: e.target.value as Role })}>
               {ROLES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
             </select>
             <button disabled={!!busy} onClick={() => void patch(u, { status: u.status === "blocked" ? "active" : "blocked" })}>
@@ -120,13 +125,12 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
       <div className="modal users-dialog">
         <h3>👥 Usuários</h3>
         <p className="small muted">
-          Qualquer conta Google pode entrar: no primeiro acesso a pessoa é cadastrada como <strong>gratuito (free)</strong>.
-          Aqui você troca o papel e bloqueia — o bloqueio vale na hora, mesmo para quem está com o app aberto.
+          Qualquer conta Google pode entrar: no primeiro acesso a pessoa entra no plano <strong>Gratuito</strong>.
+          Aqui você muda o plano e bloqueia — o bloqueio vale na hora, mesmo para quem está com o app aberto.
         </p>
         {users && (
           <div className="users-counts">
-            <span><b>{counts.free}</b> gratuitos</span>
-            <span><b>{counts.user}</b> usuários</span>
+            {PLANS.map((p) => <span key={p.id} className={`role-tag-box ${p.id}`}><b>{counts[p.id]}</b> {p.name}</span>)}
             <span><b>{counts.admin}</b> administradores</span>
             {counts.blocked > 0 && <span><b>{counts.blocked}</b> bloqueados</span>}
           </div>
@@ -140,7 +144,7 @@ export function UsersAdmin({ me, onClose }: { me: string; onClose: () => void })
             <input type="email" value={email} placeholder="nome@gmail.com" onChange={(e) => setEmail(e.target.value)} />
           </label>
           <label className="field" style={{ flex: 1 }}>
-            Papel
+            Plano
             <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
               {ROLES.map(([r, label]) => <option key={r} value={r}>{label}</option>)}
             </select>

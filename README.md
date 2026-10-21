@@ -42,30 +42,45 @@ cookie de sessão `HttpOnly` assinado com HMAC. O acesso é conferido de novo a
 cada pedido, então bloquear alguém corta o acesso na hora. O **relatório
 publicado** (HTML único) é um arquivo à parte e não passa pelo login.
 
-### Usuários
+### Usuários e planos
 
 O cadastro é aberto: **qualquer conta Google entra**. No primeiro acesso a
-pessoa é cadastrada na hora, ativa, com o papel **`free`** (gratuito). Com o
-banco ligado (`DATABASE_URL`), os usuários ficam na tabela `users`
-(`server/users.ts`). Há três papéis: `free` (padrão de quem se cadastra),
-`user` e `admin` — por enquanto `free` e `user` têm as mesmas permissões; a
-diferença fica pronta para limites de plano.
+pessoa é cadastrada na hora, ativa, no plano **Gratuito** (`free`). Com o banco
+ligado (`DATABASE_URL`), os usuários ficam na tabela `users` (`server/users.ts`),
+e o papel de cada conta é o plano dela ou `admin`.
+
+| Plano | Papel | Preço | Visuais |
+| --- | --- | --- | --- |
+| Gratuito | `free` | grátis | 9 |
+| Iniciante | `iniciante` | R$ 4,99/mês | 19 |
+| Intermediário | `intermediario` | R$ 9,99/mês | 32 |
+| Avançado | `avancado` | R$ 19,99/mês | 45 |
+
+Os planos são acumulativos e estão definidos num lugar só, `src/model/plans.ts`
+(usado pelo app e pelo site; um teste garante que os 45 visuais estão em
+exatamente um plano). No editor, visuais acima do plano aparecem com 🔒 e não
+podem ser adicionados, trocados nem duplicados — e a IA só monta painéis com os
+visuais do plano. Relatórios que já usam esses visuais continuam abrindo.
+Administradores usam tudo. O bloqueio é feito no app (o servidor não confere
+o conteúdo dos relatórios) e ainda não há pagamento: um administrador muda o
+plano na tela Usuários.
 
 - **Administradores fixos** vêm de `ADMIN_EMAILS`: sempre entram como `admin` e
   não dá para bloqueá-los pela tela (assim ninguém se tranca fora).
 - No menu da conta (seu nome, no canto), **👥 Usuários…** — só para
-  administradores — mostra todo mundo, com a contagem por papel: troque o
-  papel, bloqueie, desbloqueie, remova ou cadastre alguém antes do primeiro
-  acesso. O bloqueio vale na hora, mesmo para quem está com o app aberto.
+  administradores — mostra todo mundo, com a contagem por plano: mude o plano,
+  bloqueie, desbloqueie, remova ou cadastre alguém antes do primeiro acesso. A
+  mudança vale na hora, mesmo para quem está com o app aberto.
 - `ALLOWED_EMAILS` (opcional) faz e-mails ou domínios inteiros (`@empresa.com`)
-  entrarem já como `user`; um bloqueio na tela vale mais que ele.
-- Bancos de versões anteriores são migrados sozinhos na primeira consulta: o
-  papel `free` passa a ser aceito e os pedidos de acesso que estavam pendentes
-  viram contas ativas `free`.
+  entrarem já no plano avançado; um bloqueio na tela vale mais que ele.
+- Bancos de versões anteriores são migrados sozinhos na primeira consulta: quem
+  era `user` vai para o avançado, e pedidos de acesso pendentes viram contas
+  ativas no plano Gratuito.
 
 Cada pessoa vê só os próprios relatórios em **Meus relatórios**. Sem banco, todo
-mundo também entra (admin pelo `ADMIN_EMAILS`, `user` pelo `ALLOWED_EMAILS`,
-`free` para o resto), mas nada fica guardado.
+mundo também entra (admin pelo `ADMIN_EMAILS`, avançado pelo `ALLOWED_EMAILS`,
+Gratuito para o resto), mas nada fica guardado. O site tem a página **/planos**
+com os preços e a comparação visual a visual.
 
 ## O que dá para fazer
 
