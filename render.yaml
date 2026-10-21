@@ -1,0 +1,30 @@
+# Blueprint do Render: app + API num único Web Service (o banco é o Neon).
+# No Render: New › Blueprint › escolha este repositório. Veja "Publicar no
+# Render com Neon" no README.
+services:
+  - type: web
+    name: mini-bi
+    runtime: node
+    plan: free
+    # Deixe o Neon na mesma região (ex.: Render Ohio ↔ Neon AWS us-east-2).
+    region: ohio
+    branch: main
+    # --include=dev: o build precisa do Vite e do TypeScript.
+    buildCommand: npm ci --include=dev && npm run build
+    # O Node 24 roda server/index.ts direto (só remove os tipos).
+    startCommand: node server/index.ts
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      # Preenchidos no painel ao criar o Blueprint (não ficam no git):
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: ALLOWED_EMAILS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      # O Render gera um segredo aleatório (256 bits).
+      - key: SESSION_SECRET
+        generateValue: true

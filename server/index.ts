@@ -45,8 +45,12 @@ function fail(res: ServerResponse, err: unknown) {
   res.end();
 }
 
-// Login → API → arquivos do app.
+// /healthz (aberto, para o health check do Render) → login → API → arquivos do app.
 createServer((req, res) => {
+  if (req.url === "/healthz") {
+    res.writeHead(200, { "Content-Type": "text/plain", "Cache-Control": "no-store" }).end("ok");
+    return;
+  }
   void auth(req, res, (err) => {
     if (err) return fail(res, err);
     void api(req, res, (err) => (err ? fail(res, err) : void serveStatic(req, res).catch((e) => fail(res, e))));

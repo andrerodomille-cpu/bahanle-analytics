@@ -100,6 +100,61 @@ API rodam contra um Postgres de verdade quando há `TEST_DATABASE_URL`:
 TEST_DATABASE_URL=postgres://usuario@localhost:5432/minibi_test npm test
 ```
 
+## Publicar no Render com Neon
+
+O app e a API rodam num único **Web Service** do Render (mesmo endereço, sem
+CORS, cookie de sessão simples); o Postgres fica no **Neon**. O `render.yaml`
+já descreve o serviço.
+
+**1. Repositório no GitHub.** O Render publica a partir de um repositório Git:
+crie um repositório (pode ser privado) e envie a branch `main`. O `.env` não
+vai junto (está no `.gitignore`).
+
+**2. Banco no Neon** ([console.neon.tech](https://console.neon.tech)).
+- Crie um projeto na região **AWS US East 2 (Ohio)**, a mesma do serviço no
+  Render (`region: ohio` no `render.yaml`) — app e banco perto um do outro.
+- Em **Connect**, ligue **Connection pooling** e copie a URL
+  (`postgresql://…-pooler….neon.tech/neondb?sslmode=require…`). Ela é o
+  `DATABASE_URL`. A tabela `reports` é criada sozinha no primeiro acesso.
+
+**3. Login do Google** ([Google Cloud › Credenciais](https://console.cloud.google.com/apis/credentials)).
+No mesmo ID do cliente OAuth do desenvolvimento (ou num novo, tipo *Aplicativo
+da Web*), acrescente em *Origens JavaScript autorizadas* o endereço que o
+Render der ao serviço, ex.: `https://mini-bi.onrender.com` (o nome pode
+ganhar um sufixo se já existir). Pode levar alguns minutos para valer.
+
+**4. Serviço no Render** ([dashboard.render.com](https://dashboard.render.com)).
+- **New › Blueprint**, conecte o GitHub e escolha o repositório: o Render lê o
+  `render.yaml` e pede os valores marcados como secretos:
+  - `GOOGLE_CLIENT_ID`: o ID do passo 3;
+  - `ALLOWED_EMAILS`: quem entra (`voce@gmail.com, @empresa.com`);
+  - `DATABASE_URL`: a URL do passo 2.
+
+  O `SESSION_SECRET` é gerado pelo próprio Render e o `NODE_VERSION` é 24.
+- O build roda `npm ci --include=dev && npm run build` (testes de tipo, o
+  visualizador publicado e o app) e o serviço sobe com `node server/index.ts`
+  na porta que o Render define. O health check usa `/healthz`, a única rota
+  aberta sem login.
+- Cada `git push` na `main` publica de novo (`autoDeploy`).
+
+**5. Conferir.** Abra o endereço do serviço: deve aparecer **Entrar com
+Google**; entre com um e-mail da lista, use **Arquivo › Salvar na nuvem** e
+recarregue em outro navegador — o relatório está em **Meus relatórios**.
+
+**Bom saber**
+- No plano gratuito, o serviço dorme após 15 minutos sem acesso; o primeiro
+  acesso depois disso leva cerca de 1 minuto. O Neon gratuito também
+  suspende o banco ocioso (volta em menos de 1 segundo) e tem 0,5 GB.
+- O log pode mostrar um *SECURITY WARNING* do `pg` sobre `sslmode=require`:
+  é só um aviso (a conexão já verifica o certificado). Para sumir, troque por
+  `sslmode=verify-full` na URL.
+- A **IA (Ollama)** continua rodando no computador de quem usa. Para o app
+  publicado conversar com ele, libere a origem antes de abrir o Ollama, ex.:
+  `OLLAMA_ORIGINS=https://mini-bi.onrender.com`; o navegador pode pedir
+  permissão para acessar a rede local.
+- Para tirar o acesso de alguém, edite `ALLOWED_EMAILS` no Render: a sessão
+  da pessoa deixa de valer no pedido seguinte.
+
 ## Mapa de estudo: conceito do Power BI → código
 
 | Conceito | Onde está | O que estudar |
