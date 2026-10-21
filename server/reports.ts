@@ -130,11 +130,11 @@ function validName(v: unknown): string {
   return name;
 }
 
-/** O mínimo para ser um relatório do Mini BI (o app completa o resto ao abrir, em migrate). */
+/** O mínimo para ser um relatório do Bahanle Analytics (o app completa o resto ao abrir, em migrate). */
 function validReport(v: unknown): object {
   const r = v as Record<string, unknown> | null;
   if (!r || typeof r !== "object" || !Array.isArray(r.tables) || !Array.isArray(r.visuals) || !Array.isArray(r.measures)) {
-    throw new HttpError(400, "Conteúdo não é um relatório do Mini BI.");
+    throw new HttpError(400, "Conteúdo não é um relatório do Bahanle Analytics.");
   }
   return r;
 }

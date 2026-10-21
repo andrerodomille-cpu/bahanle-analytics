@@ -140,7 +140,7 @@ export function authMiddleware(c: AuthConfig, verify: TokenVerifier = verifyGoog
         }
         const email = String(claims.email ?? "");
         if (!email || claims.email_verified !== true) return json(res, 403, { error: "A conta Google não tem e-mail verificado." });
-        if (!isAllowed(email, c.allowed)) return json(res, 403, { error: `${email} não tem acesso a este Mini BI.` });
+        if (!isAllowed(email, c.allowed)) return json(res, 403, { error: `${email} não tem acesso ao Bahanle Analytics.` });
         const user: SessionUser = { email, name: String(claims.name ?? email), picture: claims.picture ? String(claims.picture) : undefined };
         return json(res, 200, user, { "Set-Cookie": sessionCookie(req, createSession(user, c), c.sessionHours * 3600) });
       }
@@ -184,7 +184,7 @@ export function loginPage(clientId: string, problems: string[]): string {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Entrar · Mini BI</title>
+<title>Entrar · Bahanle Analytics</title>
 <style>
   :root { color-scheme: light dark; --bg: #f3f2f1; --card: #fff; --text: #252423; --muted: #605e5c; --err: #c4314b; }
   @media (prefers-color-scheme: dark) { :root { --bg: #1b1a19; --card: #252423; --text: #f3f2f1; --muted: #a19f9d; --err: #f1707b; } }
@@ -200,7 +200,7 @@ ${problems.length ? "" : '<script src="https://accounts.google.com/gsi/client" a
 </head>
 <body>
 <main>
-  <h1><span>Mini</span> BI</h1>
+  <h1><span>Bahanle</span> Analytics</h1>
   <p>Entre com sua conta Google para continuar.</p>
   ${body}
 </main>

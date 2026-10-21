@@ -10,7 +10,7 @@ function googleLogin(env: Record<string, string>): Plugin {
   const config = configFromEnv(env);
   const store = storeFromEnv(env);
   return {
-    name: "mini-bi-google-login",
+    name: "bahanle-google-login",
     configureServer(server) {
       for (const p of configProblems(config)) server.config.logger.warn(`⚠ Login: ${p}`);
       if (!store) server.config.logger.warn("⚠ DATABASE_URL não definido: relatórios na nuvem desligados.");

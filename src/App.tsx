@@ -233,7 +233,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
     const blob = new Blob([JSON.stringify(report)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "relatorio.minibi.json";
+    a.download = "relatorio.bahanle.json";
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -334,7 +334,7 @@ Sobrescrever com a versão desta tela?`)) return;
     <PaletteContext.Provider value={palette.colors}>
       <div className={"app" + (viewOnly ? " view-only" : "")} data-theme={report.theme.mode}>
         <header className="topbar">
-          <strong className="brand">Mini BI</strong>
+          <strong className="brand">Bahanle Analytics</strong>
           {!viewOnly && (
             <nav>
               {([["report", "Relatório"], ["data", "Dados"], ["model", "Modelo"], ["notebook", "Notebooks"]] as [Tab, string][]).map(([k, label]) => (

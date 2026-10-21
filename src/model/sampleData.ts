@@ -350,7 +350,7 @@ const introNotebook: Notebook = {
   id: "nb1",
   name: "Introdução ao SQL",
   cells: [
-    md("c1", `# Introdução ao SQL no mini-bi
+    md("c1", `# Introdução ao SQL no Bahanle Analytics
 Um notebook no estilo do **Databricks**: células de SQL e de texto, executadas sobre as tabelas do modelo.
 - **Shift+Enter** executa e vai para a próxima célula; **Ctrl+Enter** executa e fica.
 - Embaixo de cada resultado: **Tabela**, **Gráfico** e **Plano** (como o motor executou).
@@ -592,7 +592,8 @@ const LOGO = "data:image/svg+xml;utf8," + encodeURIComponent(
   '<rect width="200" height="80" rx="12" fill="#252423"/>' +
   '<rect x="18" y="44" width="12" height="20" fill="#f2c811"/><rect x="36" y="30" width="12" height="34" fill="#f2c811"/>' +
   '<rect x="54" y="18" width="12" height="46" fill="#f2c811"/>' +
-  '<text x="80" y="52" font-family="Segoe UI, sans-serif" font-size="26" font-weight="700" fill="#fff">Mini BI</text></svg>',
+  '<text x="80" y="40" font-family="Segoe UI, sans-serif" font-size="22" font-weight="700" fill="#fff">Bahanle</text>' +
+  '<text x="80" y="62" font-family="Segoe UI, sans-serif" font-size="15" fill="#f2c811">Analytics</text></svg>',
 );
 
 const lojasField = (column: string) => ({ table: "Lojas", column });
@@ -600,7 +601,7 @@ const lojasField = (column: string) => ({ table: "Lojas", column });
 const geography: Draft[] = [
   {
     id: "g5", type: "image", title: "Logotipo", x: 10, y: 10, w: 200, h: 90, measureIds: [],
-    image: { src: LOGO, fit: "contain", alt: "Mini BI" },
+    image: { src: LOGO, fit: "contain", alt: "Bahanle Analytics" },
   },
   {
     id: "g4", type: "text", title: "Como ler", x: 220, y: 10, w: 700, h: 90, measureIds: [],

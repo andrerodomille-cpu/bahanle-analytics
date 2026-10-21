@@ -3,7 +3,7 @@
 # Render com Neon" no README.
 services:
   - type: web
-    name: mini-bi
+    name: bahanle-analytics
     runtime: node
     plan: free
     # Deixe o Neon na mesma região (ex.: Render Ohio ↔ Neon AWS us-east-2).

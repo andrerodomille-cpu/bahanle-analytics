@@ -55,4 +55,4 @@ createServer((req, res) => {
     if (err) return fail(res, err);
     void api(req, res, (err) => (err ? fail(res, err) : void serveStatic(req, res).catch((e) => fail(res, e))));
   });
-}).listen(PORT, () => console.log(`Mini BI em http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`Bahanle Analytics em http://localhost:${PORT}`));
