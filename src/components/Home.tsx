@@ -26,22 +26,27 @@ export function editedAgo(iso: string, now = Date.now()): string {
   return `em ${new Date(iso).toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: abs > 300 * 86400 ? "numeric" : undefined })}`;
 }
 
-/** Miniatura de cada relatório: cor e alturas tiradas do id (sempre as mesmas para o mesmo relatório). */
+/**
+ * Miniatura de cada relatório nas cores da marca: a variante (fundo amarelo ou
+ * vermelho, linha ou só colunas) e as alturas saem do id, sempre iguais para o
+ * mesmo relatório.
+ */
 function Thumb({ seed }: { seed: string }) {
   let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const hue = h % 360;
+  const variant = h % 4;
   const bars = Array.from({ length: 6 }, (_, i) => 30 + ((h >>> (i * 3)) % 60));
+  const line = bars.map((b, i) => `${19.5 + i * 23},${78 - b * 0.55}`).join(" ");
   return (
-    <svg className="thumb" viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true"
-      style={{ ["--hue" as string]: hue }}>
+    <svg className={`thumb v${variant}`} viewBox="0 0 160 90" preserveAspectRatio="none" aria-hidden="true">
       <rect className="thumb-bg" width="160" height="90" />
       <rect className="thumb-card" x="10" y="10" width="44" height="22" rx="3" />
       <rect className="thumb-card" x="58" y="10" width="44" height="22" rx="3" />
       <rect className="thumb-card" x="106" y="10" width="44" height="22" rx="3" />
       {bars.map((b, i) => (
-        <rect key={i} className="thumb-bar" x={12 + i * 23} y={84 - b * 0.7} width="15" height={b * 0.7} rx="2" />
+        <rect key={i} className={i % 2 ? "thumb-bar alt" : "thumb-bar"} x={12 + i * 23} y={84 - b * 0.7} width="15" height={b * 0.7} rx="2" />
       ))}
+      {variant % 2 === 0 && <polyline className="thumb-line" points={line} />}
     </svg>
   );
 }
@@ -117,7 +122,8 @@ export function Home({ firstName, current, onContinue, onOpen, onCreate, askName
       <div className="home-inner">
         <header className="home-hero">
           <div>
-            <h1>Olá, {firstName}</h1>
+            <span className="home-eyebrow">Meus relatórios</span>
+            <h1>Olá, <em>{firstName}</em></h1>
             <p>Crie um relatório ou continue de onde parou.</p>
           </div>
           <button className="primary big" onClick={() => onCreate("blank")}>+ Novo relatório</button>

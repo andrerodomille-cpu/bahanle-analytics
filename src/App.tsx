@@ -468,7 +468,7 @@ Sobrescrever com a versão desta tela?`)) return;
       <div className={"app" + (viewOnly ? " view-only" : "")} data-theme={report.theme.mode}>
         {view === "home" && user && (
           <>
-            <header className="topbar">
+            <header className="topbar home-top">
               <span className="brand"><BrandMark />Bahanle <span>Analytics</span></span>
               <span style={{ flex: 1 }} />
               {busy && <span className="muted-on-dark">{busy}…</span>}

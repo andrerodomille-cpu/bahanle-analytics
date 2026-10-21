@@ -921,12 +921,6 @@ button.big { padding: 10px 18px; font-size: 15px; font-weight: 600; border-radiu
 .report-actions button { width: 30px; height: 30px; padding: 0; border-radius: 8px; background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15); }
 @media (hover: none) { .report-actions { opacity: 1; } }
 
-.thumb-bg { fill: hsl(var(--hue) 70% 96%); }
-.thumb-card { fill: #fff; opacity: 0.9; }
-.thumb-bar { fill: hsl(var(--hue) 65% 52%); }
-.app[data-theme="dark"] .thumb-bg { fill: hsl(var(--hue) 30% 16%); }
-.app[data-theme="dark"] .thumb-card { fill: hsl(var(--hue) 20% 24%); }
-.app[data-theme="dark"] .thumb-bar { fill: hsl(var(--hue) 70% 62%); }
 
 .report-card.skeleton { height: 190px; background: linear-gradient(90deg, var(--surface) 25%, var(--hover) 50%, var(--surface) 75%) 0 0 / 200% 100%;
   animation: skeleton 1.2s infinite linear; }
@@ -952,3 +946,55 @@ button.big { padding: 10px 18px; font-size: 15px; font-weight: 600; border-radiu
 .topbar nav { display: flex; gap: 4px; flex-wrap: nowrap; }
 .topbar .cloud-status { max-width: 220px; }
 @media (max-width: 1440px) { .topbar button.brand > span { display: none; } }
+
+/* ---------- Página inicial no estilo do site (amarelo e vermelho) ---------- */
+.brand-mark rect:last-child { fill: #d7263d; }
+.app { --brand-yellow: #f2c811; --brand-yellow-soft: #fdf1c2; --brand-yellow-ink: #8a6a00;
+  --brand-red: #d7263d; --brand-red-dark: #b01e31; --brand-red-soft: #fde4e7; }
+.app[data-theme="dark"] { --brand-yellow-soft: #4a3d10; --brand-yellow-ink: #f2c811;
+  --brand-red: #ff4d5e; --brand-red-dark: #ff6b79; --brand-red-soft: #3d1a1f; }
+
+.topbar.home-top { position: relative; }
+.topbar.home-top::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: linear-gradient(90deg, var(--brand-yellow), var(--brand-red)); }
+
+/* Dentro do Início, o "acento" é o vermelho da marca. */
+.home { --accent: var(--brand-red); --accent-dark: var(--brand-red-dark);
+  background: radial-gradient(900px 340px at 100% 0%, color-mix(in srgb, var(--brand-yellow) 18%, transparent), transparent 70%),
+    radial-gradient(700px 300px at 0% 0%, color-mix(in srgb, var(--brand-red) 7%, transparent), transparent 70%), var(--bg); }
+.home-eyebrow { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--brand-red); margin-bottom: 6px; }
+.home h1 { font-size: 34px; }
+.home h1 em { font-style: normal; background: linear-gradient(90deg, #e9b800, var(--brand-yellow) 40%, var(--brand-red));
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.home h2::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: linear-gradient(var(--brand-yellow), var(--brand-red)); }
+.home button.primary { border-radius: 999px; }
+.home button.big { padding: 11px 22px; box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-red) 25%, transparent); }
+.home .count { color: var(--brand-red); background: var(--brand-red-soft); border-color: transparent; }
+
+.home-continue, .home-continue:hover { border-left: 1px solid var(--border);
+  background: linear-gradient(var(--brand-yellow), var(--brand-red)) left / 5px 100% no-repeat, var(--surface); padding-left: 22px; }
+.home-continue:hover { border-color: var(--brand-red); }
+.home-continue-icon { color: var(--brand-red); }
+
+.tpl:hover, .report-card:hover { border-color: var(--brand-red); }
+.tpl-art.blank { background: var(--brand-yellow-soft); border-color: color-mix(in srgb, var(--brand-yellow) 60%, var(--border)); color: var(--brand-yellow-ink); }
+.tpl:hover .tpl-art.blank { border-color: var(--brand-red); color: var(--brand-red); }
+.badge-open { color: var(--brand-red-dark); background: var(--brand-red-soft); }
+.app[data-theme="dark"] .badge-open { color: var(--brand-red); background: var(--brand-red-soft); }
+.home-tools input:focus, .home-tools select:focus { outline: 2px solid color-mix(in srgb, var(--brand-red) 45%, transparent); outline-offset: 1px; border-color: var(--brand-red); }
+.home-empty { border-color: color-mix(in srgb, var(--brand-yellow) 55%, var(--border)); background: color-mix(in srgb, var(--brand-yellow-soft) 45%, transparent); }
+.home-empty .brand-mark { opacity: 1; }
+.home-error { color: var(--brand-red-dark); background: var(--brand-red-soft); }
+.report-card.skeleton { background: linear-gradient(90deg, var(--surface) 25%, var(--brand-yellow-soft) 50%, var(--surface) 75%) 0 0 / 200% 100%; }
+
+/* Miniaturas: quatro variantes em amarelo e vermelho. */
+.thumb .thumb-card { fill: var(--surface); opacity: 0.92; }
+.thumb .thumb-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; }
+.thumb.v0 .thumb-bg, .thumb.v1 .thumb-bg { fill: var(--brand-yellow-soft); }
+.thumb.v2 .thumb-bg, .thumb.v3 .thumb-bg { fill: var(--brand-red-soft); }
+.thumb.v0 .thumb-bar, .thumb.v1 .thumb-bar, .thumb.v3 .thumb-bar.alt { fill: var(--brand-yellow); }
+.thumb.v0 .thumb-bar.alt, .thumb.v1 .thumb-bar.alt { fill: color-mix(in srgb, var(--brand-yellow) 50%, var(--surface)); }
+.thumb.v2 .thumb-bar, .thumb.v3 .thumb-bar { fill: var(--brand-red); }
+.thumb.v2 .thumb-bar.alt { fill: color-mix(in srgb, var(--brand-red) 45%, var(--surface)); }
+.thumb.v0 .thumb-line { stroke: var(--brand-red); }
+.thumb.v2 .thumb-line { stroke: var(--brand-yellow); }
