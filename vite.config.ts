@@ -3,18 +3,23 @@ import type { Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { authMiddleware, configFromEnv, configProblems } from "./server/auth.ts";
+import { reportsApi, storeFromEnv } from "./server/reports.ts";
 
-/** Login com Google também no `npm run dev` e no `vite preview` (ver server/auth.ts). */
+/** Login com Google e API de relatórios também no `npm run dev` e no `vite preview` (ver server/). */
 function googleLogin(env: Record<string, string>): Plugin {
   const config = configFromEnv(env);
+  const store = storeFromEnv(env);
   return {
     name: "mini-bi-google-login",
     configureServer(server) {
       for (const p of configProblems(config)) server.config.logger.warn(`⚠ Login: ${p}`);
+      if (!store) server.config.logger.warn("⚠ DATABASE_URL não definido: relatórios na nuvem desligados.");
       server.middlewares.use(authMiddleware(config));
+      server.middlewares.use(reportsApi(store));
     },
     configurePreviewServer(server) {
       server.middlewares.use(authMiddleware(config));
+      server.middlewares.use(reportsApi(store));
     },
   };
 }

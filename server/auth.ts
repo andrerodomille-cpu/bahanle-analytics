@@ -11,6 +11,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { json, readBody, type Next } from "./http.ts";
 
 export interface AuthConfig {
   /** Client ID OAuth do Google Cloud (tipo "Aplicativo da Web"). */
@@ -28,6 +29,9 @@ export interface SessionUser {
   name: string;
   picture?: string;
 }
+
+/** Pedido que passou pelo login: as rotas seguintes leem o usuário daqui. */
+export type AuthedRequest = IncomingMessage & { user?: SessionUser };
 
 /** Confere o ID token do Google e devolve as declarações (claims) dele. */
 export type TokenVerifier = (token: string, clientId: string) => Promise<Record<string, unknown>>;
@@ -114,22 +118,6 @@ function sessionCookie(req: IncomingMessage, value: string, maxAge: number): str
 
 // ---------------- Middleware ----------------
 
-type Next = (err?: unknown) => void;
-
-function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...headers });
-  res.end(JSON.stringify(body));
-}
-
-async function readBody(req: IncomingMessage, limit = 16_384): Promise<string> {
-  let body = "";
-  for await (const chunk of req) {
-    body += chunk;
-    if (body.length > limit) throw new Error("corpo grande demais");
-  }
-  return body;
-}
-
 /**
  * Middleware no formato do Connect (o mesmo do Vite): trata /api/auth/* e
  * barra todo o resto sem sessão. Navegações recebem a página de login;
@@ -163,7 +151,10 @@ export function authMiddleware(c: AuthConfig, verify: TokenVerifier = verifyGoog
 
       const user = readSession(cookieValue(req, COOKIE), c);
       if (path === "/api/auth/me") return user ? json(res, 200, user) : json(res, 401, { error: "Sem sessão." });
-      if (user) return next();
+      if (user) {
+        (req as AuthedRequest).user = user;
+        return next();
+      }
 
       const wantsPage = req.method === "GET" && (req.headers.accept ?? "").includes("text/html");
       if (wantsPage) {

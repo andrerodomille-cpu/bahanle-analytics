@@ -69,6 +69,28 @@ medidas do modelo e devolve só um **plano em JSON** (o formato é imposto pelo
 mini-DAX; o que falhar volta ao modelo para uma correção. O resultado entra
 como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 
+## Relatórios na nuvem (Postgres / Neon)
+
+Com `DATABASE_URL` no `.env`, cada usuário salva os próprios relatórios no
+banco (o dono é o e-mail do login). A tabela `reports` é criada sozinha na
+primeira consulta (`server/reports.ts`): o relatório inteiro vai numa coluna
+`jsonb`, e `version` impede que duas abas sobrescrevam uma à outra (409).
+
+| Rota | O que faz |
+| --- | --- |
+| `GET /api/reports` | Lista os relatórios do usuário (nome, versão, data, tamanho) |
+| `POST /api/reports` | Cria `{ name, data }` |
+| `GET /api/reports/:id` | Abre |
+| `PUT /api/reports/:id` | Salva `{ name?, data?, version }` — recusa (409) se outra aba salvou antes |
+| `DELETE /api/reports/:id` | Exclui |
+
+Limite de 10 MB por relatório (os dados das tabelas vão junto). Os testes da
+API rodam contra um Postgres de verdade quando há `TEST_DATABASE_URL`:
+
+```bash
+TEST_DATABASE_URL=postgres://usuario@localhost:5432/minibi_test npm test
+```
+
 ## Mapa de estudo: conceito do Power BI → código
 
 | Conceito | Onde está | O que estudar |
@@ -95,6 +117,7 @@ como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 | KPI, cascata, mapa de calor | `src/components/MoreVisuals.tsx` | `waterfallSteps`: base + variações por categoria = total; escala de cores entre mín. e máx. |
 | Texto dinâmico | `fillTemplate` em `src/engine/query.ts` | `[Medida]` avaliada no contexto de filtro da caixa de texto |
 | Mapas | `src/engine/geo.ts`, `src/model/geo/` | Projeção equirretangular, associação valor → UF, contornos do IBGE |
+| API e banco | `server/reports.ts` | Rotas REST por usuário, jsonb no Postgres, controle de concorrência otimista por versão |
 | Login | `server/auth.ts`, `server/index.ts` | ID token do Google (JWT) verificado no servidor → lista de permitidos → cookie de sessão assinado |
 | Assistente de IA | `src/model/ai.ts`, `src/components/AiAssistant.tsx` | Esquema do modelo no prompt → plano JSON forçado por JSON Schema → validação de campos e medidas → ações num passo só de desfazer |
 | Análises | `src/engine/analytics.ts` | Regressão linear e intervalo de predição, média móvel, quartis e bigodes de Tukey, regra de Sturges, influenciadores, decomposição |
