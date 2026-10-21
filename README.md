@@ -72,7 +72,16 @@ como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 ## Relatórios na nuvem (Postgres / Neon)
 
 Com `DATABASE_URL` no `.env`, cada usuário salva os próprios relatórios no
-banco (o dono é o e-mail do login). A tabela `reports` é criada sozinha na
+banco (o dono é o e-mail do login). No menu **Arquivo**:
+
+- **☁ Salvar na nuvem** (**Ctrl+S**): a primeira vez pede um nome; depois
+  atualiza o mesmo relatório. A barra mostra o nome e **• não salvo** quando há
+  alterações (seleções nos gráficos não contam). Se outra aba ou computador
+  salvou depois que você abriu, o app pergunta antes de sobrescrever.
+- **☁ Salvar uma cópia na nuvem…**: cria outro relatório a partir do aberto.
+- **☁ Meus relatórios…**: lista, abre, renomeia e exclui.
+
+O `localStorage` continua sendo o rascunho automático da tela. A tabela `reports` é criada sozinha na
 primeira consulta (`server/reports.ts`): o relatório inteiro vai numa coluna
 `jsonb`, e `version` impede que duas abas sobrescrevam uma à outra (409).
 
@@ -117,6 +126,7 @@ TEST_DATABASE_URL=postgres://usuario@localhost:5432/minibi_test npm test
 | KPI, cascata, mapa de calor | `src/components/MoreVisuals.tsx` | `waterfallSteps`: base + variações por categoria = total; escala de cores entre mín. e máx. |
 | Texto dinâmico | `fillTemplate` em `src/engine/query.ts` | `[Medida]` avaliada no contexto de filtro da caixa de texto |
 | Mapas | `src/engine/geo.ts`, `src/model/geo/` | Projeção equirretangular, associação valor → UF, contornos do IBGE |
+| Relatórios na nuvem (app) | `src/model/cloud.ts`, `src/components/CloudReports.tsx` | Vínculo id + versão; "não salvo" comparando referências campo a campo (`contentChanged`) |
 | API e banco | `server/reports.ts` | Rotas REST por usuário, jsonb no Postgres, controle de concorrência otimista por versão |
 | Login | `server/auth.ts`, `server/index.ts` | ID token do Google (JWT) verificado no servidor → lista de permitidos → cookie de sessão assinado |
 | Assistente de IA | `src/model/ai.ts`, `src/components/AiAssistant.tsx` | Esquema do modelo no prompt → plano JSON forçado por JSON Schema → validação de campos e medidas → ações num passo só de desfazer |

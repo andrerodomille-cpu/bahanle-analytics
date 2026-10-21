@@ -15,6 +15,9 @@ import { PerfPanel } from "./components/Package4Visuals";
 import { ArrangePane } from "./components/Arrange";
 import { NotebookView } from "./components/Notebook";
 import { AiAssistant } from "./components/AiAssistant";
+import { CloudReports } from "./components/CloudReports";
+import type { CloudLink } from "./model/cloud";
+import { CloudError, contentChanged, createCloudReport, loadLink, saveCloudReport, storeLink } from "./model/cloud";
 import { expandGroups } from "./engine/arrange";
 
 type Tab = "report" | "data" | "model" | "notebook";
@@ -125,6 +128,17 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
       .catch(() => setUser(null));
   }, [viewOnly]);
 
+  // Relatório da nuvem aberto no editor e o conteúdo dele como está salvo lá.
+  const [cloud, setCloud] = useState<CloudLink | null>(() => (viewOnly ? null : loadLink()));
+  const [cloudOpen, setCloudOpen] = useState(false);
+  const cloudSaved = useRef(report);
+  const dirty = cloud !== null && contentChanged(cloudSaved.current, report);
+  const linkCloud = (link: CloudLink | null, saved: Report = report) => {
+    cloudSaved.current = saved;
+    setCloud(link);
+    storeLink(link);
+  };
+
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
     location.reload();
@@ -230,6 +244,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
       const data = JSON.parse(await file.text()) as Report;
       if (!Array.isArray(data.tables) || !Array.isArray(data.visuals)) throw new Error("formato inválido");
       dispatch({ type: "reset", report: migrate({ ...data, filters: [] }) });
+      linkCloud(null);
       setSelectedId(null);
     } catch (e) {
       alert(`Não foi possível abrir o arquivo: ${e instanceof Error ? e.message : e}`);
@@ -247,6 +262,50 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
       setBusy(null);
     }
   };
+
+  /**
+   * Salvar na nuvem: atualiza o relatório aberto ou cria um novo (pede o nome).
+   * Se outra aba ou computador salvou antes (409), pergunta se sobrescreve.
+   */
+  const saveToCloud = (asCopy = false) => run("Salvando na nuvem", async () => {
+    const snapshot = report;
+    let link: CloudLink;
+    if (cloud && !asCopy) {
+      try {
+        link = await saveCloudReport(cloud, snapshot);
+      } catch (e) {
+        if (!(e instanceof CloudError) || (e.status !== 409 && e.status !== 404)) throw e;
+        if (e.status === 409) {
+          if (!confirm(`"${cloud.name}" foi salvo em outro lugar depois que você o abriu.
+
+Sobrescrever com a versão desta tela?`)) return;
+          link = await saveCloudReport(cloud, snapshot, true);
+        } else {
+          if (!confirm(`"${cloud.name}" não existe mais na nuvem. Salvar como um relatório novo?`)) return;
+          link = await createCloudReport(cloud.name, snapshot);
+        }
+      }
+    } else {
+      const suggestion = cloud ? `${cloud.name} (cópia)` : page.name;
+      const name = prompt("Nome do relatório na nuvem:", suggestion)?.trim();
+      if (!name) return;
+      link = await createCloudReport(name, snapshot);
+    }
+    linkCloud(link, snapshot);
+  });
+
+  // Ctrl+S salva na nuvem (em vez do "salvar página" do navegador).
+  useEffect(() => {
+    if (viewOnly || !user) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!busy) void saveToCloud();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   /** Botões do relatório: navegar entre páginas ou aplicar um indicador. */
   const runAction = (a: ButtonAction) => {
@@ -284,6 +343,11 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
             </nav>
           )}
           {viewOnly && <span className="muted-on-dark">Relatório publicado · somente leitura</span>}
+          {cloud && (
+            <span className="cloud-status" title={dirty ? "Alterações ainda não salvas na nuvem (Ctrl+S)" : "Salvo na nuvem"}>
+              ☁ {cloud.name}{dirty && <span className="cloud-dirty"> • não salvo</span>}
+            </span>
+          )}
           <span style={{ flex: 1 }} />
           {busy && <span className="muted-on-dark">{busy}…</span>}
           {!viewOnly && (
@@ -383,6 +447,16 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
           <Menu label="Arquivo ▾" align="right">
             {!viewOnly && (
               <>
+                {user && (
+                  <>
+                    <button className="menu-item" onClick={() => void saveToCloud()}>
+                      ☁ Salvar na nuvem{cloud ? `: ${cloud.name}` : "…"} <span className="menu-key">Ctrl+S</span>
+                    </button>
+                    {cloud && <button className="menu-item" onClick={() => void saveToCloud(true)}>☁ Salvar uma cópia na nuvem…</button>}
+                    <button className="menu-item" onClick={() => setCloudOpen(true)}>☁ Meus relatórios…</button>
+                    <div className="menu-sep" />
+                  </>
+                )}
                 <button className="menu-item" onClick={exportJson}>Salvar relatório (.json)</button>
                 <button className="menu-item" onClick={() => fileRef.current?.click()}>Abrir relatório (.json)</button>
                 <div className="menu-sep" />
@@ -417,6 +491,7 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
                   onClick={() => {
                     if (confirm("Descartar o relatório atual e voltar ao exemplo?")) {
                       dispatch({ type: "reset", report: sampleReport() });
+                      linkCloud(null);
                       setSelectedId(null);
                     }
                   }}
@@ -580,6 +655,21 @@ export default function App({ initial, viewOnly = false }: { initial?: Report; v
             dispatch={dispatch}
             onGoToPage={goToPage}
             onClose={() => setAiOpen(false)}
+          />
+        )}
+        {cloudOpen && (
+          <CloudReports
+            link={cloud}
+            dirty={dirty}
+            onOpen={(link, opened) => {
+              dispatch({ type: "reset", report: opened });
+              linkCloud(link, opened);
+              setSelectedIds([]);
+              setPageId(opened.pages[0].id);
+              setTab("report");
+            }}
+            onLinkChange={(link) => (link ? linkCloud(link, cloudSaved.current) : linkCloud(null))}
+            onClose={() => setCloudOpen(false)}
           />
         )}
         {editingColumn && (
