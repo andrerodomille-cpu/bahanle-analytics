@@ -1,6 +1,6 @@
 // Motor de consulta: contexto de filtro, propagação por relacionamentos
-// e avaliação de medidas. É uma versão didática do que o VertiPaq + DAX
-// fazem no Power BI (sem compressão colunar, mas com a mesma semântica
+// e avaliação de medidas. É uma versão didática do que os motores das
+// ferramentas de BI fazem (sem compressão colunar, mas com a mesma semântica
 // básica de filtros em direção única).
 
 import { parse, type Ast, type CalcArg, type CompareOp, type IterFn, type TableExpr } from "./expr";
@@ -157,7 +157,7 @@ export class Engine {
   /**
    * Linhas de `tableName` que passam pelos filtros. Filtros em tabelas
    * inalcançáveis (ex.: fato filtrando dimensão) são ignorados — é a
-   * direção única do Power BI. O cache é incremental por prefixo, então
+   * direção única. O cache é incremental por prefixo, então
    * acrescentar o filtro de categoria reaproveita o contexto já filtrado.
    */
   rows(tableName: string, filters: ContextFilter[]): Row[] {
@@ -367,7 +367,7 @@ export class Engine {
   /**
    * Funções de inteligência de tempo: partem das datas visíveis no contexto,
    * calculam o novo conjunto de datas e trocam TODOS os filtros da tabela de
-   * datas por ele (como o Power BI faz com uma tabela de datas marcada).
+   * datas por ele (como numa tabela de datas marcada).
    */
   private timeIntelligence(filters: ContextFilter[], arg: Extract<CalcArg, { kind: "dates" }>): ContextFilter[] {
     const visible = new Set<string>();
@@ -554,7 +554,7 @@ const DATE_LEVELS: DatePart[] = ["year", "quarter", "month", "day"];
 
 /**
  * Níveis de detalhamento do eixo. Uma coluna de data vira automaticamente
- * Ano › Trimestre › Mês › Dia (como a "data/hora automática" do Power BI);
+ * Ano › Trimestre › Mês › Dia (a "data/hora automática");
  * outros campos usam o eixo seguido dos níveis extras configurados.
  */
 export function hierarchyOf(report: Report, visual: Visual): FieldRef[] {
@@ -634,7 +634,7 @@ export interface GridResult {
 
 /**
  * Cada célula é avaliada no contexto linha + coluna; os totais são avaliados
- * de novo no contexto mais largo (não somados) — como no Power BI, o total de
+ * de novo no contexto mais largo (não somados) — o total de
  * uma medida não-aditiva (ex.: ticket médio) é a medida no total, não a soma.
  */
 export function runGrid(engine: Engine, report: Report, visual: Visual): GridResult {
@@ -699,7 +699,7 @@ export function runVisual(engine: Engine, report: Report, visual: Visual): Visua
     for (const category of categories) {
       const ctx = [...context, { field: axis, keys: new Set([valueKey(category)]) }];
       const values = measures.map((m) => engine.evaluateMeasure(m, ctx));
-      // Como no Power BI, categorias em que todas as medidas são BLANK somem.
+      // Categorias em que todas as medidas são BLANK somem.
       if (measures.length === 0 || values.some((v) => v !== null)) rows.push({ category, values });
     }
     // Filtro Top N: as N categorias com maior valor da primeira medida.

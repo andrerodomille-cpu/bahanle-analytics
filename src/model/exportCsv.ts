@@ -3,7 +3,7 @@ import { valueKey } from "../engine/query";
 import type { Measure, Visual } from "./types";
 import { formatValue } from "./format";
 
-// "Exportar dados" do Power BI: os dados agregados que o visual mostra.
+// "Exportar dados": os dados agregados que o visual mostra.
 // Separador ";" e vírgula decimal para abrir direto no Excel em português.
 
 const cell = (v: string | number | null): string => {

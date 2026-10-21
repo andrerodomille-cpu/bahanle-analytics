@@ -65,7 +65,7 @@ describe("middleware", () => {
     const url = await start(google({}));
     const page = await fetch(url + "/", { headers: { accept: "text/html" } });
     const html = await page.text();
-    expect(html).toContain("Use sua conta Google");
+    expect(html).toContain("Seus dados viram");
     expect(html).toContain(`data-client_id="${config.clientId}"`);
     expect(html).not.toContain("APP");
     expect((await fetch(url + "/src/main.tsx")).status).toBe(401);
@@ -94,7 +94,7 @@ describe("middleware", () => {
     server!.close();
     url = await start(google({}), { ...config, allowed: ["@empresa.com"] });
     expect((await fetch(url + "/api/auth/me", { headers: { cookie: session } })).status).toBe(401);
-    expect(await (await fetch(url + "/", { headers: { cookie: session, accept: "text/html" } })).text()).toContain("Use sua conta Google");
+    expect(await (await fetch(url + "/", { headers: { cookie: session, accept: "text/html" } })).text()).toContain("Seus dados viram");
   });
 
   it("administrador do .env entra com papel admin", async () => {
@@ -120,5 +120,46 @@ describe("middleware", () => {
     const url = await start(google({ email: "ana@gmail.com", email_verified: true }), configFromEnv({}));
     expect(await (await fetch(url + "/", { headers: { accept: "text/html" } })).text()).toContain("GOOGLE_CLIENT_ID");
     expect((await fetch(url + "/api/auth/google", { method: "POST", body: "{}" })).status).toBe(503);
+  });
+});
+
+describe("site público", () => {
+  let server: Server | undefined;
+  afterEach(() => server?.close());
+
+  async function start() {
+    const mw = authMiddleware(config, envPolicy(config), async () => ({}));
+    server = createServer((req, res) => void mw(req, res, () => res.end("APP")));
+    await new Promise<void>((r) => server!.listen(0, r));
+    return `http://127.0.0.1:${(server!.address() as AddressInfo).port}`;
+  }
+  const html = { accept: "text/html" };
+
+  it("cada página tem endereço próprio e o login no topo", async () => {
+    const url = await start();
+    for (const [path, text] of [["/", "Seus dados viram"], ["/recursos", "Tudo o que um time de dados precisa"],
+      ["/visuais", "Quando usar"], ["/ia", "Peça o painel em português"], ["/seguranca", "Cada pessoa no seu lugar"], ["/duvidas", "Perguntas e respostas"]]) {
+      const page = await (await fetch(url + path, { headers: html })).text();
+      expect(page).toContain(text);
+      expect(page).toContain(`data-client_id="${config.clientId}"`);
+      expect(page).toContain(`href="${path}" aria-current="page"`);
+    }
+    // A página de visuais traz uma ficha por componente.
+    expect((await (await fetch(url + "/visuais", { headers: html })).text()).match(/class="vcard/g)).toHaveLength(45);
+  });
+
+  it("quem já entrou vê as páginas com o atalho para o app, e o / abre o app", async () => {
+    const url = await start();
+    const cookie = `minibi_session=${createSession({ email: "ana@gmail.com", name: "Ana" }, config)}`;
+    const visuais = await (await fetch(url + "/visuais", { headers: { ...html, cookie } })).text();
+    expect(visuais).toContain("Abrir meus relatórios");
+    expect(visuais).not.toContain("data-client_id");
+    expect(await (await fetch(url + "/", { headers: { ...html, cookie } })).text()).toBe("APP");
+  });
+
+  it("sem sessão, endereços desconhecidos mostram o início e o resto continua fechado", async () => {
+    const url = await start();
+    expect(await (await fetch(url + "/qualquer", { headers: html })).text()).toContain("Seus dados viram");
+    expect((await fetch(url + "/src/main.tsx")).status).toBe(401);
   });
 });

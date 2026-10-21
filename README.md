@@ -1,9 +1,8 @@
 # Bahanle Analytics
 
-Um sistema de BI no estilo Power BI, feito do zero: obter e preparar dados,
-modelar, criar medidas numa linguagem no estilo DAX, montar relatórios
-interativos e entregá-los (imagem, PDF ou HTML publicado). Nenhum código do
-Power BI foi usado — só os conceitos públicos.
+Uma plataforma de análise de dados e dashboards feita do zero: obter e preparar
+dados, modelar, criar medidas com uma linguagem de fórmulas, montar relatórios
+interativos e entregá-los (imagem, PDF ou HTML publicado).
 
 ```bash
 npm install
@@ -19,7 +18,10 @@ só cuida do **login com Google**: sem sessão, nenhum arquivo do app é entregu
 
 ## Login com Google
 
-Só entra quem tem acesso — tanto no `npm run dev` quanto em produção.
+Quem ainda não entrou vê o **site público** (`server/site.ts`), com páginas
+Início, Recursos, Visuais (uma ficha por componente), IA, Segurança e Dúvidas,
+e o botão **Entrar com Google** no topo de todas. Só entra quem tem acesso — tanto no
+`npm run dev` quanto em produção.
 
 1. No [Google Cloud Console](https://console.cloud.google.com/apis/credentials),
    crie uma credencial **ID do cliente OAuth** do tipo **Aplicativo da Web** e
@@ -67,7 +69,7 @@ valem só `ADMIN_EMAILS` e `ALLOWED_EMAILS`.
 | **Obter dados** | CSV (separador detectado), Excel `.xlsx` (todas as planilhas), JSON (listas, campos aninhados viram `a.b`) |
 | **Preparar** (aba Dados) | Editor de consultas com *Etapas aplicadas*: tipo detectado automaticamente, renomear, mudar tipo, remover coluna, filtrar linhas, substituir valores, remover duplicadas e linhas em branco |
 | **Modelar** (aba Modelo) | Relacionamentos muitos-para-um, colunas calculadas (`RELATED`, `IF`), tipo data |
-| **Calcular** | Medidas em mini-DAX: agregações, `CALCULATE`/`ALL`, `IF`, iteradores `SUMX`/`FILTER`, inteligência de tempo |
+| **Calcular** | Medidas com fórmulas: agregações, `CALCULATE`/`ALL`, `IF`, iteradores `SUMX`/`FILTER`, inteligência de tempo |
 | **Visualizar** | 37 visuais (incluindo KPI, combo, cascata, mapa de calor, texto dinâmico e botões), páginas, filtro cruzado, segmentação, Painel de Filtros (visual/página/relatório), Top N, ordenação, barras de dados e escala de cores |
 | **Explorar** | Drill-down, árvore de decomposição, principais influenciadores, histograma e box plot, previsão com faixa de confiança, linhas de referência, modo foco, exportar dados do visual (CSV) |
 | **Apresentar** | Temas claro/escuro, 4 paletas, indicadores (bookmarks) |
@@ -89,7 +91,7 @@ ollama serve             # http://localhost:11434 (já libera localhost no CORS)
 O LLM não cria nada direto: ele recebe as tabelas, colunas, relacionamentos e
 medidas do modelo e devolve só um **plano em JSON** (o formato é imposto pelo
 `format` do Ollama). O app confere cada coluna e valida cada medida no motor
-mini-DAX; o que falhar volta ao modelo para uma correção. O resultado entra
+motor de fórmulas; o que falhar volta ao modelo para uma correção. O resultado entra
 como uma ação só — **Ctrl+Z** desfaz o dashboard inteiro.
 
 ## Relatórios na nuvem (Postgres / Neon)
@@ -174,8 +176,8 @@ ganhar um sufixo se já existir). Pode levar alguns minutos para valer.
   aberta sem login.
 - Cada `git push` na `main` publica de novo (`autoDeploy`).
 
-**5. Conferir.** Abra o endereço do serviço: deve aparecer a tela **Entrar**;
-entre com o e-mail de `ADMIN_EMAILS`, crie um relatório pelo **Início** e abra
+**5. Conferir.** Abra o endereço do serviço: deve aparecer a página de apresentação;
+use **Entrar com Google** no topo com o e-mail de `ADMIN_EMAILS`, crie um relatório pelo **Início** e abra
 o endereço em outro navegador — o relatório está em **Meus relatórios**.
 
 **Bom saber**
@@ -192,15 +194,15 @@ o endereço em outro navegador — o relatório está em **Meus relatórios**.
 - Para tirar o acesso de alguém, use **Bloquear** na tela **Usuários**: a
   sessão da pessoa deixa de valer no pedido seguinte.
 
-## Mapa de estudo: conceito do Power BI → código
+## Mapa de estudo: conceito → código
 
 | Conceito | Onde está | O que estudar |
 | --- | --- | --- |
-| Power Query | `src/model/transform.ts`, `importers.ts` | Tabela = fonte + etapas reaplicadas em ordem; "Tipo Alterado" automático |
+| Editor de consultas | `src/model/transform.ts`, `importers.ts` | Tabela = fonte + etapas reaplicadas em ordem; "Tipo Alterado" automático |
 | Modelo semântico | `src/model/types.ts` | Esquema estrela: fato `Vendas` + dimensões + `Calendário` |
 | Propagação de filtros | `Engine.rows` / `Engine.resolve` (`src/engine/query.ts`) | Filtros fluem do lado "um" para o "muitos" |
-| DAX: parser | `src/engine/expr.ts` | Tokenizer → AST, gramática recursiva descendente |
-| DAX: avaliação | `Engine.evaluate` | Contexto de filtro, BLANK, contexto de linha |
+| Fórmulas: parser | `src/engine/expr.ts` | Tokenizer → AST, gramática recursiva descendente |
+| Fórmulas: avaliação | `Engine.evaluate` | Contexto de filtro, BLANK, contexto de linha |
 | `CALCULATE` / `ALL` | `Engine.applyCalcArgs` | Substituir/remover filtros; tabela expandida |
 | Inteligência de tempo | `Engine.timeIntelligence` | Datas visíveis → novo conjunto de datas → troca os filtros da tabela de datas |
 | Iteradores | `case "iter"` e `Engine.tableRows` | `SUMX(tabela, expr)` = contexto de linha dentro do contexto de filtro |
@@ -221,6 +223,7 @@ o endereço em outro navegador — o relatório está em **Meus relatórios**.
 | Relatórios na nuvem (app) | `src/model/cloud.ts`, `src/components/Home.tsx` | Vínculo id + versão; "não salvo" comparando referências campo a campo (`contentChanged`) |
 | API e banco | `server/reports.ts` | Rotas REST por usuário, jsonb no Postgres, controle de concorrência otimista por versão |
 | Usuários | `server/users.ts`, `src/components/UsersAdmin.tsx` | Política de acesso (admins do .env + tabela `users`), pedidos de acesso, cache curto do papel por e-mail |
+| Site público | `server/site.ts`, `server/site-visuals.ts` | Páginas em HTML do servidor (`/`, `/recursos`, `/visuais`, `/ia`, `/seguranca`, `/duvidas`) com o login no topo; sem sessão, só elas são entregues |
 | Login | `server/auth.ts`, `server/index.ts` | ID token do Google (JWT) verificado no servidor → lista de permitidos → cookie de sessão assinado |
 | Assistente de IA | `src/model/ai.ts`, `src/components/AiAssistant.tsx` | Esquema do modelo no prompt → plano JSON forçado por JSON Schema → validação de campos e medidas → ações num passo só de desfazer |
 | Análises | `src/engine/analytics.ts` | Regressão linear e intervalo de predição, média móvel, quartis e bigodes de Tukey, regra de Sturges, influenciadores, decomposição |
@@ -425,7 +428,7 @@ HTML publicado.
   medida e cor pela 2ª (opcional). Com colunas de latitude e longitude, usa a
   média delas; sem, usa o centro da UF ou região do valor.
 
-### Linguagem (mini-DAX)
+### Linguagem de fórmulas
 
 | Tipo | Exemplos |
 | --- | --- |
@@ -497,7 +500,7 @@ O visualizador é o próprio app compilado num arquivo só
 2. **Relacionamento bidirecional**: uma opção para o filtro fluir nos dois
    sentidos (e veja por que gera ambiguidade).
 3. **Armazenamento colunar**: troque `rows: Row[]` por colunas + dicionário
-   (a ideia do VertiPaq) e meça com 1 milhão de linhas.
+   (armazenamento colunar) e meça com 1 milhão de linhas.
 4. **Mesclar consultas** (join) e **acrescentar** (union) no editor de consultas.
 5. **Servidor**: salvar relatórios num backend, com usuários e compartilhamento.
 

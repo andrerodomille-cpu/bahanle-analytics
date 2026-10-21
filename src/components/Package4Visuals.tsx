@@ -31,7 +31,7 @@ export function RuledValue({ rules, measure, value, text }: {
 
 // ---------------- Cartão de várias linhas ----------------
 
-/** Um bloco por categoria, com as medidas lado a lado (o "cartão de várias linhas" do Power BI). */
+/** Um bloco por categoria, com as medidas lado a lado (o "cartão de várias linhas"). */
 export function MultiCardVisual({ visual, rows, measures, selected, onSelect }: {
   visual: Visual;
   rows: ResultRow[];

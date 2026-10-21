@@ -270,7 +270,7 @@ export interface History {
 
 export type HistoryAction = Action | { type: "undo" } | { type: "redo" };
 
-/** Seleções (filtro cruzado) não entram no histórico, como no Power BI. */
+/** Seleções (filtro cruzado) não entram no histórico de desfazer. */
 const NOT_UNDOABLE = new Set<Action["type"]>(["toggleFilter", "setFilter", "clearFilters"]);
 const LIMIT = 100;
 const MERGE_MS = 1000;

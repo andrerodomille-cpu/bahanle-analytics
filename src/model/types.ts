@@ -1,4 +1,4 @@
-// Modelo semântico: o equivalente ao "Modelo" do Power BI.
+// Modelo semântico: tabelas, relacionamentos e medidas do relatório.
 
 export type Value = string | number | null;
 export type Row = Record<string, Value>;
@@ -15,7 +15,7 @@ export interface Column {
   error?: string;
 }
 
-// ---------- Editor de consultas (Power Query) ----------
+// ---------- Editor de consultas ----------
 
 export type FilterOp = "=" | "<>" | ">" | ">=" | "<" | "<=" | "contém" | "não está em branco";
 
@@ -58,7 +58,7 @@ export interface FieldRef {
 
 /**
  * Relacionamento muitos-para-um com filtro em direção única,
- * como o padrão do Power BI: `from` é o lado "muitos" (fato) e
+ * como o padrão das ferramentas de BI: `from` é o lado "muitos" (fato) e
  * `to` é o lado "um" (dimensão). Filtros fluem de `to` para `from`.
  */
 export interface Relationship {
@@ -72,7 +72,7 @@ export type MeasureFormat = "number" | "currency" | "percent";
 export interface Measure {
   id: string;
   name: string;
-  /** Tabela "dona" da medida (só organização, como no Power BI). */
+  /** Tabela "dona" da medida (só organização). */
   table: string;
   /** Expressão no estilo DAX, ex.: SUM(Vendas[Valor]) */
   expression: string;
@@ -319,7 +319,7 @@ export interface Visual {
 
 export type FilterScope = "visual" | "page" | "report";
 
-/** Filtro do Painel de Filtros, nos três níveis do Power BI. */
+/** Filtro do Painel de Filtros, nos três níveis (visual, página e relatório). */
 export interface PaneFilter {
   id: string;
   scope: FilterScope;

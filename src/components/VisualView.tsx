@@ -914,7 +914,7 @@ const sortByFirstMeasure = (rows: ResultRow[]) =>
   [...rows].sort((a, b) => (b.values[0] ?? -Infinity) - (a.values[0] ?? -Infinity));
 
 /**
- * Ordenação do visual: a escolhida pelo usuário ou o padrão do Power BI
+ * Ordenação do visual: a escolhida pelo usuário ou o padrão
  * (eixo de tempo/linha em ordem de categoria; demais pela 1ª medida, decrescente).
  * Recebe o visual com o eixo efetivo (já considerando o nível de drill).
  */

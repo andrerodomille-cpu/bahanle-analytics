@@ -184,7 +184,7 @@ export function describeModel(report: Pick<Report, "tables" | "relationships" | 
 }
 
 export function systemPrompt(report: Pick<Report, "tables" | "relationships" | "measures">): string {
-  return `Você é o assistente de um sistema de BI parecido com o Power BI. O usuário pede um dashboard em português e você responde SOMENTE com um plano em JSON.
+  return `Você é o assistente de um sistema de BI (Bahanle Analytics). O usuário pede um dashboard em português e você responde SOMENTE com um plano em JSON.
 
 ${describeModel(report)}
 

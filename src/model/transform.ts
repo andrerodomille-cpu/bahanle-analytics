@@ -1,4 +1,4 @@
-// Editor de consultas (Power Query, em miniatura): a tabela final é sempre
+// Editor de consultas: a tabela final é sempre
 // fonte + etapas aplicadas em ordem. Nada é alterado "no lugar" — apagar ou
 // mudar uma etapa e reaplicar dá um resultado reprodutível.
 
@@ -142,7 +142,7 @@ function matches(v: Value, op: FilterOp, raw: string, type: ColumnType): boolean
 
 /**
  * Detecta o tipo de uma coluna pelos valores (como o "Tipo Alterado"
- * automático do Power Query): número, data ou texto.
+ * automático): número, data ou texto.
  */
 export function detectType(values: unknown[]): ColumnType {
   const sample = values.filter((v) => v !== null && v !== undefined && v !== "");

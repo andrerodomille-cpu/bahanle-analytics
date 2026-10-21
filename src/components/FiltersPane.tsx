@@ -8,7 +8,7 @@ import type { Action } from "../model/store";
 import { valueKey } from "../engine/query";
 import { formatValue } from "../model/format";
 
-// Painel de Filtros do Power BI: o mesmo filtro pode valer só para um visual,
+// Painel de Filtros: o mesmo filtro pode valer só para um visual,
 // para a página inteira ou para todas as páginas do relatório.
 
 const SCOPES: { scope: FilterScope; title: string; hint: string }[] = [
@@ -63,7 +63,7 @@ function FilterCard({ report, filter, dispatch }: { report: Report; filter: Pane
   const [open, setOpen] = useState(filter.values.length === 0);
   const [search, setSearch] = useState("");
 
-  // Valores distintos da coluna inteira (o painel lista todos, como no Power BI).
+  // Valores distintos da coluna inteira (o painel lista todos, não só os visíveis).
   const table = report.tables.find((t) => t.name === filter.field.table);
   const all = useMemo(() => {
     const seen = new Map<string, Value>();

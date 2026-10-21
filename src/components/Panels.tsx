@@ -825,7 +825,7 @@ export function ColumnEditor({ report, tableName, column, dispatch, onClose }: {
         <h3>{column ? "Editar coluna calculada" : "Nova coluna calculada"}</h3>
         <p className="muted small">
           Uma coluna calculada é avaliada <strong>uma vez por linha</strong> (contexto de linha) e gravada na
-          tabela, como no Power BI. Use-a como eixo, legenda ou filtro. Para números que mudam com os
+          tabela. Use-a como eixo, legenda ou filtro. Para números que mudam com os
           filtros, crie uma medida.
         </p>
         <div className="field-row">

@@ -1,7 +1,7 @@
 import type { Visual } from "../model/types";
 
 /**
- * Organizar visuais (menu Formatar › Alinhar/Distribuir do Power BI): cada
+ * Organizar visuais (menu Formatar › Alinhar/Distribuir): cada
  * função recebe os visuais selecionados e devolve só as mudanças de posição
  * ou tamanho, prontas para a ação "updateVisuals" (um único passo de desfazer).
  */
@@ -21,7 +21,7 @@ function diff(visuals: Box[], next: (v: Box) => Partial<Box>): Patches {
   return out;
 }
 
-/** Alinha pela borda (ou centro) do conjunto, como o Power BI. */
+/** Alinha pela borda (ou centro) do conjunto. */
 export function alignPatches(visuals: Box[], mode: AlignMode): Patches {
   if (visuals.length < 2) return {};
   const left = Math.min(...visuals.map((v) => v.x));

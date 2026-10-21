@@ -15,7 +15,7 @@ const ALIGN: [AlignMode, string, string][] = [
 ];
 
 /**
- * Painel com vários visuais selecionados (Formatar › Organizar do Power BI):
+ * Painel com vários visuais selecionados (Formatar › Organizar):
  * alinhar, distribuir, igualar tamanhos e agrupar. Cada botão é um único
  * passo de desfazer.
  */

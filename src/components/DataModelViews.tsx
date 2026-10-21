@@ -97,7 +97,7 @@ export function DataView({ report, dispatch, onEditColumn }: {
   );
 }
 
-/** "Etapas aplicadas" do Power Query: a receita que transforma a fonte na tabela final. */
+/** "Etapas aplicadas" do editor de consultas: a receita que transforma a fonte na tabela final. */
 function AppliedSteps({ table, onChange }: { table: Table; onChange: (steps: QueryStep[]) => void }) {
   const steps = table.query?.steps ?? [];
   const errors = table.query ? applySteps(table.query).errors : [];
@@ -207,7 +207,7 @@ export function ModelView({ report, dispatch }: { report: Report; dispatch: Disp
   const fromField = fields.find((f) => fieldKey(f) === from);
   const toField = fields.find((f) => fieldKey(f) === to);
 
-  // O lado "um" precisa ter valores únicos, como no Power BI.
+  // O lado "um" precisa ter valores únicos.
   let problem: string | null = null;
   if (fromField && toField) {
     if (fromField.table === toField.table) problem = "Escolha colunas de tabelas diferentes.";

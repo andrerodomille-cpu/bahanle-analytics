@@ -129,7 +129,7 @@ export function Canvas({
     return list;
   };
 
-  // Modo foco: o visual ocupa a área do relatório, como no Power BI.
+  // Modo foco: o visual ocupa a área inteira do relatório.
   if (focused) {
     return (
       <div className="canvas-scroll">
@@ -216,7 +216,7 @@ export function Canvas({
 
 // ---------------- Drill-down ----------------
 
-/** Botões de drill do Power BI: subir, ir para o próximo nível e o modo "clique detalha". */
+/** Botões de drill: subir, ir para o próximo nível e o modo "clique detalha". */
 function drillActions(report: Report, v: Visual, dispatch: Dispatch<Action>): FrameAction[] {
   if (["kpi", "slicer", "fieldparam", "bullet", "calendar", "gantt", "sankey", "whatif", "radar", "sunburst", "violin",
     "waffle", "pictogram", "dumbbell", "bump", "stacked100", "area100"].includes(v.type) || (v.type === "matrix" && v.expandable) || DECORATIVE.includes(v.type) || ANALYSIS.includes(v.type) || MAPS.includes(v.type)) return [];

@@ -1,4 +1,4 @@
-// Colunas calculadas: como no Power BI, são avaliadas UMA vez por linha
+// Colunas calculadas: são avaliadas UMA vez por linha
 // (contexto de linha) e o resultado fica gravado na tabela — ao contrário
 // das medidas, que são recalculadas a cada contexto de filtro.
 

@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react";
 import type { PaletteName } from "./types";
 
-// Paletas de cores dos visuais (o "tema do relatório" do Power BI).
+// Paletas de cores dos visuais (o "tema do relatório").
 
 export const PALETTES: Record<PaletteName, { label: string; colors: string[] }> = {
   padrao: { label: "Padrão", colors: ["#118dff", "#12239e", "#e66c37", "#6b007b", "#e044a7", "#744ec2", "#d9b300", "#d64550"] },

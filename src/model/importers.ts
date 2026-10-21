@@ -1,5 +1,5 @@
 // Fontes de dados. Cada importação gera uma consulta: a fonte "crua" mais as
-// etapas automáticas de tipo, como o Power Query faz ao conectar num arquivo.
+// etapas automáticas de tipo, criadas ao conectar num arquivo.
 
 import Papa from "papaparse";
 import type { Column, Row, Table, TableQuery, Value } from "./types";
