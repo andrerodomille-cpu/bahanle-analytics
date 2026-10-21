@@ -9,8 +9,6 @@ export type Action =
   | { type: "reset"; report: Report }
   | { type: "addTable"; table: Table }
   | { type: "removeTable"; name: string }
-  /** Atualizar (nextop-lake): dados novos da fonte, reaplicando as etapas da consulta. */
-  | { type: "refreshTable"; table: Table }
   | { type: "addRelationship"; rel: Relationship }
   | { type: "removeRelationship"; id: string }
   | { type: "upsertColumn"; table: string; name: string; expression: string; oldName?: string }
@@ -68,17 +66,6 @@ export function reducer(state: Report, action: Action): Report {
         filters: state.filters.filter((f) => f.field.table !== action.name),
         paneFilters: state.paneFilters.filter((f) => f.field.table !== action.name),
       });
-    case "refreshTable": {
-      const fresh = action.table;
-      return materialize({
-        ...state,
-        tables: state.tables.map((t) => {
-          if (t.name !== fresh.name || !fresh.query) return t;
-          // As colunas calculadas do modelo continuam; materialize recalcula.
-          return withSteps({ ...t, query: fresh.query, remote: fresh.remote }, t.query?.steps ?? []);
-        }),
-      });
-    }
     case "addRelationship":
       return materialize({ ...state, relationships: [...state.relationships, action.rel] });
     case "removeRelationship":
@@ -252,7 +239,7 @@ function withSteps(t: Table, steps: QueryStep[]): Table {
   };
   const rebuilt = tableFromQuery(t.name, { ...query, steps });
   const calculated = t.columns.filter((c) => c.expression && !rebuilt.columns.some((b) => b.name === c.name));
-  // Preserva o que não vem da consulta (origem SQL do notebook, origem remota do nextop-lake).
+  // Preserva o que não vem da consulta (ex.: a origem SQL do notebook).
   return { ...t, ...rebuilt, columns: [...rebuilt.columns, ...calculated] };
 }
 
@@ -334,6 +321,10 @@ export function migrate(report: Report): Report {
   if (!Array.isArray(r.paneFilters)) r = { ...r, paneFilters: [] };
   if (!Array.isArray(r.bookmarks)) r = { ...r, bookmarks: [] };
   if (!r.theme) r = { ...r, theme: { mode: "light", palette: "padrao" } };
+  // O conector do nextop-lake saiu: tabelas salvas com origem remota viram tabelas comuns.
+  if (r.tables.some((t) => "remote" in t)) {
+    r = { ...r, tables: r.tables.map(({ remote: _remote, ...t }: Table & { remote?: unknown }) => t) };
+  }
   return r;
 }
 

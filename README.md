@@ -284,23 +284,6 @@ da arquitetura medalhão, com acumulado no ano por `SUM … OVER` e ano anterior
 por `LAG(…, 12)`), e a página **Camada Gold (SQL)** usa essa tabela. Na aba
 Dados, a tabela mostra o comando que a gerou.
 
-### Conector nextop-lake (Parquet + DuckDB)
-
-O projeto irmão [nextop-lake](../nextop-lake) extrai o Postgres de produção para
-Parquet (bronze → silver → gold, com DuckDB) e serve as tabelas por HTTP.
-No painel **Dados**:
-
-- **🔌 nextop-lake**: informe a URL da API (padrão `http://localhost:8000`) e,
-  se houver, o token; escolha as tabelas (as gold já vêm marcadas) e importe.
-  A opção *Detectar relacionamentos* liga fato e dimensões por colunas com cara
-  de chave (`loja_id`, `ProdutoID`…), únicas de um lado e contidas do outro.
-- **↻ Atualizar**: busca de novo todas as tabelas do nextop-lake e **reaplica as
-  etapas** do editor de consultas e as colunas calculadas, como o Atualizar do
-  Power BI.
-
-O token fica só na sessão do navegador (nunca vai para o relatório salvo ou
-publicado). Código em `src/model/lake.ts` e `src/components/LakeConnector.tsx`.
-
 ### Mapas
 
 Os contornos dos estados vêm da malha territorial do **IBGE** (API de malhas,

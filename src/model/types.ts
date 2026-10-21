@@ -45,8 +45,6 @@ export interface Table {
   query?: TableQuery;
   /** Tabela criada por SQL num notebook (CREATE TABLE … AS): o comando que a gerou. */
   sql?: string;
-  /** Tabela trazida do nextop-lake (API HTTP): de onde buscar de novo ao atualizar. */
-  remote?: { url: string; layer: string; name: string; updatedAt?: string };
 }
 
 export type DatePart = "year" | "quarter" | "month" | "day";
