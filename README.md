@@ -1,4 +1,4 @@
-# Bahanle Analytics
+# Dantreun Analytics
 
 Uma plataforma de análise de dados e dashboards feita do zero: obter e preparar
 dados, modelar, criar medidas com uma linguagem de fórmulas, montar relatórios
@@ -155,7 +155,7 @@ Limite de 10 MB por relatório (os dados das tabelas vão junto). Os testes da
 API rodam contra um Postgres de verdade quando há `TEST_DATABASE_URL`:
 
 ```bash
-TEST_DATABASE_URL=postgres://usuario@localhost:5432/bahanle_test npm test
+TEST_DATABASE_URL=postgres://usuario@localhost:5432/dantreun_test npm test
 ```
 
 ## Publicar no Render com Neon
@@ -178,7 +178,7 @@ vai junto (está no `.gitignore`).
 **3. Login do Google** ([Google Cloud › Credenciais](https://console.cloud.google.com/apis/credentials)).
 No mesmo ID do cliente OAuth do desenvolvimento (ou num novo, tipo *Aplicativo
 da Web*), acrescente em *Origens JavaScript autorizadas* o endereço que o
-Render der ao serviço, ex.: `https://bahanle-analytics.onrender.com` (o nome pode
+Render der ao serviço, ex.: `https://dantreun-analytics.onrender.com` (o nome pode
 ganhar um sufixo se já existir). Pode levar alguns minutos para valer.
 
 **4. Serviço no Render** ([dashboard.render.com](https://dashboard.render.com)).
@@ -209,7 +209,7 @@ o endereço em outro navegador — o relatório está em **Meus relatórios**.
   `sslmode=verify-full` na URL.
 - A **IA (Ollama)** continua rodando no computador de quem usa. Para o app
   publicado conversar com ele, libere a origem antes de abrir o Ollama, ex.:
-  `OLLAMA_ORIGINS=https://bahanle-analytics.onrender.com`; o navegador pode pedir
+  `OLLAMA_ORIGINS=https://dantreun-analytics.onrender.com`; o navegador pode pedir
   permissão para acessar a rede local.
 - Para tirar o acesso de alguém, use **Bloquear** na tela **Usuários**: a
   sessão da pessoa deixa de valer no pedido seguinte.

@@ -42,7 +42,7 @@ export interface AccessPolicy {
 }
 
 const lower = (e: string) => e.trim().toLowerCase();
-const BLOCKED = "Seu acesso ao Bahanle Analytics foi bloqueado.";
+const BLOCKED = "Seu acesso ao Dantreun Analytics foi bloqueado.";
 
 /** Papel de quem não está no banco: admin do .env, avançado por ALLOWED_EMAILS ou "free". */
 const envRole = (email: string, c: AuthConfig): Role =>

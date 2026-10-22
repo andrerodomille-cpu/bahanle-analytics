@@ -18,7 +18,7 @@ function googleLogin(env: Record<string, string>): Plugin {
     reportsApi(pool ? pgReportStore(pool) : null),
   ];
   return {
-    name: "bahanle-google-login",
+    name: "dantreun-google-login",
     configureServer(server) {
       for (const p of configProblems(config)) server.config.logger.warn(`⚠ Login: ${p}`);
       if (!pool) server.config.logger.warn("⚠ DATABASE_URL não definido: usuários não ficam guardados e relatórios na nuvem desligados.");

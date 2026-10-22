@@ -128,7 +128,7 @@ const FAQ: [string, string][] = [
 
 const PAGES: Record<string, Page> = {
   "/": {
-    title: "Bahanle Analytics · Análise de dados e dashboards no navegador",
+    title: "Dantreun Analytics · Análise de dados e dashboards no navegador",
     description: "Importe, modele, calcule e visualize seus dados em dashboards interativos, direto do navegador.",
     body: () => `
   <section class="hero">
@@ -176,7 +176,7 @@ const PAGES: Record<string, Page> = {
   },
 
   "/recursos": {
-    title: "Recursos · Bahanle Analytics",
+    title: "Recursos · Dantreun Analytics",
     description: "Importação, preparação, modelagem, fórmulas, análises, notebooks SQL e publicação.",
     body: () => `
   ${pageHero("Recursos", "Tudo o que um time de dados precisa", "Da importação ao compartilhamento, com análises avançadas e um assistente de IA — tudo no navegador.")}
@@ -247,7 +247,7 @@ const PAGES: Record<string, Page> = {
   },
 
   "/visuais": {
-    title: "Visuais · Bahanle Analytics",
+    title: "Visuais · Dantreun Analytics",
     description: `Os ${VISUAL_COUNT} visuais explicados: o que cada um mostra, quando usar e quais campos preencher.`,
     body: () => `
   ${pageHero("Visualizações", `${VISUAL_COUNT} visuais, cada um explicado`, "Para cada componente: o que ele mostra, quando usar, quais campos preencher no painel de propriedades e as opções extras. Todos são interativos — clique para filtrar os outros visuais e exporte os dados de cada um.")}
@@ -291,7 +291,7 @@ const PAGES: Record<string, Page> = {
   },
 
   "/ia": {
-    title: "Assistente de IA · Bahanle Analytics",
+    title: "Assistente de IA · Dantreun Analytics",
     description: "Peça o painel em português: a IA cria medidas, escolhe os visuais e organiza a página.",
     body: () => `
   ${pageHero("Assistente de IA", "Peça o painel em português", "Escreva o que quer ver e a IA monta a página: cria as medidas que faltam, escolhe os visuais e organiza o layout.")}
@@ -336,7 +336,7 @@ const PAGES: Record<string, Page> = {
   },
 
   "/seguranca": {
-    title: "Segurança e acesso · Bahanle Analytics",
+    title: "Segurança e acesso · Dantreun Analytics",
     description: "Login com Google, conta criada na hora, relatórios separados por pessoa e bloqueio imediato.",
     body: () => `
   ${pageHero("Segurança e acesso", "Cada pessoa no seu lugar", "Login com Google, conta criada na hora e relatórios separados por pessoa — com administradores de olho.")}
@@ -367,7 +367,7 @@ const PAGES: Record<string, Page> = {
   },
 
   "/planos": {
-    title: "Planos · Bahanle Analytics",
+    title: "Planos · Dantreun Analytics",
     description: "Gratuito, Iniciante, Intermediário e Avançado: os visuais de cada plano e os preços.",
     body: () => `
   ${pageHero("Planos", "Escolha o plano do tamanho da sua análise", "Comece grátis e libere mais visuais quando precisar. Os planos são acumulativos: cada um traz tudo o que o anterior tem.")}
@@ -431,7 +431,7 @@ const PAGES: Record<string, Page> = {
   },
 
   "/duvidas": {
-    title: "Dúvidas · Bahanle Analytics",
+    title: "Dúvidas · Dantreun Analytics",
     description: "Perguntas frequentes sobre instalação, arquivos, celular, IA, compartilhamento e acesso.",
     body: () => `
   ${pageHero("Dúvidas frequentes", "Perguntas e respostas", "O que mais nos perguntam sobre a ferramenta.")}
@@ -481,7 +481,7 @@ ${!signedIn && !ctx.problems.length ? '<script src="https://accounts.google.com/
 <body>
 <header id="topo">
   <nav class="wrap nav" aria-label="Principal">
-    <a class="logo" href="/">${MARK}<div>Bahanle <span>Analytics</span></div></a>
+    <a class="logo" href="/">${MARK}<div>Dantreun <span>Analytics</span></div></a>
     <div class="links" id="links">
       ${NAV.map(([href, label]) => `<a href="${href}"${href === path || (!PAGES[path] && href === "/") ? ' aria-current="page"' : ""}>${label}</a>`).join("")}
     </div>
@@ -493,9 +493,9 @@ ${banner}
 <main>${body}</main>
 <footer>
   <div class="wrap">
-    <a class="logo" href="/">${MARK}<div>Bahanle <span>Analytics</span></div></a>
+    <a class="logo" href="/">${MARK}<div>Dantreun <span>Analytics</span></div></a>
     <nav aria-label="Rodapé">${NAV.map(([href, label]) => `<a href="${href}">${label}</a>`).join("")}</nav>
-    <span>© ${new Date().getFullYear()} Bahanle Analytics</span>
+    <span>© ${new Date().getFullYear()} Dantreun Analytics</span>
   </div>
 </footer>
 <script>${SCRIPT}</script>
@@ -708,6 +708,15 @@ const CSS = `
   .anim .reveal.shown { opacity: 1; transform: none; }
   @media (prefers-reduced-motion: reduce) { .anim .reveal { opacity: 1; transform: none; } }
 
+  /* Topo em telas médias: menu mais justo e sem a frase ao lado do login. */
+  @media (max-width: 1180px) {
+    .signin .label { display: none; }
+    .nav { gap: 16px; }
+    .links a { padding: 6px 9px; font-size: 14.5px; }
+  }
+  @media (max-width: 900px) {
+    .logo span { display: none; }
+  }
   @media (max-width: 1020px) {
     .grid, .plans { grid-template-columns: repeat(2, 1fr); }
     .steps, .steps.four { grid-template-columns: repeat(2, 1fr); }

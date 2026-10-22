@@ -254,7 +254,7 @@ export default function App({ initial, viewOnly = false, account = null }: {
     const blob = new Blob([JSON.stringify(report)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "relatorio.bahanle.json";
+    a.download = "relatorio.dantreun.json";
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -479,7 +479,7 @@ Sobrescrever com a versão desta tela?`)) return;
         {view === "home" && user && (
           <>
             <header className="topbar home-top">
-              <span className="brand"><BrandMark />Bahanle <span>Analytics</span></span>
+              <span className="brand"><BrandMark />Dantreun <span>Analytics</span></span>
               <span style={{ flex: 1 }} />
               {busy && <span className="muted-on-dark">{busy}…</span>}
               {userMenu}
@@ -499,8 +499,8 @@ Sobrescrever com a versão desta tela?`)) return;
         {view === "editor" && (<>
         <header className="topbar">
           {viewOnly || !user
-            ? <span className="brand"><BrandMark />Bahanle <span>Analytics</span></span>
-            : <button className="brand" title="Início: meus relatórios" onClick={() => setView("home")}><BrandMark />Bahanle <span>Analytics</span></button>}
+            ? <span className="brand"><BrandMark />Dantreun <span>Analytics</span></span>
+            : <button className="brand" title="Início: meus relatórios" onClick={() => setView("home")}><BrandMark />Dantreun <span>Analytics</span></button>}
           {!viewOnly && (
             <nav>
               {([["report", "Relatório"], ["data", "Dados"], ["model", "Modelo"], ["notebook", "Notebooks"]] as [Tab, string][]).map(([k, label]) => (

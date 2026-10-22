@@ -62,4 +62,4 @@ createServer((req, res) => {
       void reports(req, res, (err) => (err ? fail(res, err) : void serveStatic(req, res).catch((e) => fail(res, e))));
     });
   });
-}).listen(PORT, () => console.log(`Bahanle Analytics em http://localhost:${PORT}`));
+}).listen(PORT, () => console.log(`Dantreun Analytics em http://localhost:${PORT}`));

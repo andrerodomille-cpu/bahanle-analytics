@@ -61,6 +61,6 @@ export async function publishReport(report: Report) {
   }
   const html = embedReport(viewer, { ...report, filters: [] });
   const url = URL.createObjectURL(new Blob([html], { type: "text/html" }));
-  download(url, "Relatório - Bahanle Analytics.html");
+  download(url, "Relatório - Dantreun Analytics.html");
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
